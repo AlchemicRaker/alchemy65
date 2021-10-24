@@ -1,0 +1,137 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "ca65",
+	"fileTypes": [
+		"*.s",
+		"*.asm",
+		"*.inc"
+	],
+	"patterns": [
+		{
+			"name": "string.ca65",
+			"begin": "\"",
+			"end": "\"",
+			"patterns": [
+				{
+					"name": "constant.character.escape",
+					"match": "\\\\."
+				}
+			]
+		},
+		{
+			"name": "support.type",
+			"match": "\\b(byt|byte|asciiz|word|addr|charmap|dbyt|dword|faraddr|lobytes|hibytes|res)\\b"
+		},
+		{
+			"name": "support.type",
+			"match": "\\b(adc|and|asl|bit|clc|cld|cli|clv|cmp|cpx|cpy|dec|dex|dey|eor|inc|inx|iny|lda|ldx|ldy|lsr|nop|ora|pha|php|pla|plp|rol|ror|sbc|sec|sed|sei|sta|stx|sty|tax|txa|tay|tya|tsx|txs)\\b"
+		},
+		{
+			"name": "support.type",
+			"match": "\\b(aac|aax|alr|anc|ane|arr|aso|asr|atx|axa|axs|dcm|dcp|dop|hlt|ins|isb|isc|jam|kil|lae|lar|las|lax|lse|lxa|oal|rla|rra|sax|sbx|skb|sha|shs|say|shx|shy|slo|skw|sre|sxa|sya|tas|top|xaa|xas)\\b"
+		},
+		{
+			"name": "support.type",
+			"match": "\\b(jeq|jne|jmi|jpl|jcs|jcc|jvs|jvc)\\b"
+		},
+		{
+			"name": "support.type",
+			"match": "\\b(bcc|bcs|beq|bmi|bne|bpl|brk|bvc|bvs|jmp|jsr|rti|rts)\\b"
+		},
+		{
+			"name": "support.type",
+			"match": "\\b(a16|a8|addr|align|assert|autoimport|bankbytes|case|charmap|dbyt|debuginfo|define|delmac|delmacro|definedmacro|dword|end|endmac|endmacro|endrep|endrepeat|error|exitmac|exitmacro|export|exportzp|faraddr|fatal|fileopt|fopt|global|globalzp|hitbytes|i16|i8|import|importzp|interruptor|ismnem|ismnemonic|linecount|list|listbytes|lobytes|local|localchar|macpack|macro|mac|org|out|p02|p4510|p816|pagelen|pagelength|pc02|popcpu|popseg|psc02|pushcpu|pushseg|reloc|repeat|res|segment|set|setcpu|smart|tag|undef|undefine|warning|word|zeropage)\\b"
+		},
+		{
+			"name": "constant.rgb-value",
+			"match": "\\bCBM_(BLACK|WHITE|RED|CYAN|PURPLE|GREEN|BLUE|YELLOW|ORANGE|BROWN|LIGHT_RED|DARK_GRAY|GRAY|DARK_GREY|GREY|LIGHT_GREEN|LIGHT_BLUE|LIGHT_GRAY|LIGHT_GREY)\\b"
+		},
+		{
+			"name": "keyword.ca65",
+			"match": "\\b(repeat|endrepeat|scope|endscop|proc|endproc|struct|endstruct|union|endunion|enum|endenum|segment|macro|endmac|endmacro|sym|on|off)\\b",
+			"comment": "ca65 keywords"
+		},
+		{
+			"name": "keyword.control",
+			"match": "\\b(if|ifblank|ifconst|ifdef|ifnblank|ifndef|ifnref|ifp02|ifp4510|ifp816|ifpc02|ifpsc02|ifref|else|endif)\\b"
+		},
+		{
+			"name": "comment",
+			"begin": ";",
+			"end": "\n"
+		},
+		{
+			"name": "storage",
+			"match": "\\b(export|import|importzp|include)\\b"
+		},
+		{
+			"name": "entity.other.attribute-name",
+			"comment": "Labels",
+			"match": "([_A-Za-z][_a-zA-Z0-9^:]*)?[:]"
+		}, {
+			"name": "entity.other.attribute-name",
+			"comment": "Labels",
+			"match": "[\\s\\t]*[:]?([\\-\\+_a-zA-Z][\\-\\+_a-zA-Z0-9]*)\\n"
+		},
+		{
+			"name": "constant.numeric",
+			"comment": "Hex Value",
+			"match": "[#]?[\\>\\<]?[$][0-9a-fA-F]+"
+		},
+		{
+			"name": "constant.numeric",
+			"comment": "Binary Value",
+			"match": "[#]?[\\>\\<]?[%][0-1]+"
+		},
+		{
+			"name": "constant.numeric",
+			"comment": "Decimal Value",
+			"match": "[#]?[\\>\\<]?[^$%][0-9]+"
+		},
+		{
+			"name": "keyword",
+			"comment": "Operators",
+			"match": "[^:]?[\\+\\-]+"
+		},
+		{
+			"name": "keyword",
+			"comment": "Operators",
+			"match": "#{1}[><]?"
+		},
+		{
+			"name": "keyword",
+			"comment": "Indexor",
+			"match": ",\\s?y|,\\s?x"
+		},
+		{
+			"name": "variable.ca65",
+			"comment": "Constants",
+			"match": "\\b[_a-zA-Z][_a-zA-Z0-9]+(\\s|\\t)+(=|:=)"
+		},
+		{
+			"name": "variable.ca65",
+			"comment": "Variable",
+			"match": "[^\\s<>$\\.][_a-zA-Z][_a-zA-Z0-9]+(\\n|\\s|[^,])"
+		}
+	],
+	"repository": {
+		"keywords": {
+			"patterns": [{
+				"name": "keyword.ca65",
+				"match": "\\b(if|elseif|endif|repeat|endrepeat|scope|endscop|proc|endproc|.struct|.endstruct|union|endunion|enum|endenum)\\b"
+			}]
+		},
+		"strings": {
+			"name": "string.quoted.double.ca65",
+			"begin": "\"",
+			"end": "\"",
+			"patterns": [
+				{
+					"name": "constant.character.escape",
+					"match": "\\\\."
+				}
+			]
+		}
+	},
+	"scopeName": "source.ca65"
+}
