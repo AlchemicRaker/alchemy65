@@ -1,5 +1,5 @@
 {
-  "name": "alchemy65",
+	"name": "alchemy65",
 	"displayName": "Alchemy65",
 	"description": "Adds support for cc65, ca65, and NES development.",
 	"version": "0.0.1",
@@ -10,7 +10,12 @@
 		"Other"
 	],
 	"activationEvents": [
-        "onCommand:alchemy65.helloWorld"
+		"onDebugResolve:alchemy65",
+		"onDebugDynamicConfigurations:alchemy65",
+		"onCommand:alchemy65.helloWorld",
+		"onCommand:extension.alchemy65.getRomPath",
+		"onCommand:extension.alchemy65.getDbgPath",
+		"onCommand:extension.alchemy65.getMesenPath"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -20,19 +25,99 @@
 				"title": "Hello World"
 			}
 		],
-        "languages": [
+		"languages": [
 			{
 				"id": "ca65",
-				"aliases": ["ca65 Assembler"],
-				"extensions": [".s", ".asm", ".inc"],
+				"aliases": [
+					"ca65 Assembler"
+				],
+				"extensions": [
+					".s",
+					".asm",
+					".inc"
+				],
 				"configuration": "./ca65-language-config.json"
-        	}
+			}
 		],
-        "grammars": [
+		"debuggers": [
+			{
+				"type": "alchemy65",
+				"languages": [
+					"ca65"
+				],
+				"label": "Alchemy65 Debug",
+				"variables": {
+					"AskForRomPath": "extension.alchemy65.getRomPath",
+					"AskForDbgPath": "extension.alchemy65.getDbgPath",
+					"AskForMesenPath": "extension.alchemy65.getMesenPath"
+				},
+				"initialConfigurations": [
+					{
+						"type": "alchemy65",
+						"request": "launch",
+						"name": "Debug rom with mesen",
+						"romPath": "${workspaceFolder}/${command:AskForRomPath}",
+						"dbgPath": "${workspaceFolder}/${command:AskForDbgPath}",
+						"mesenPath": "${workspaceFolder}/${command:AskForMesenPath}",
+						"stopOnEntry": true
+					}
+				],
+				"configurationSnippets": [
+					{
+						"label": "Alchemy65 Debug: Launch",
+						"description": "A new configuration for 'debugging' a rom.",
+						"body": {
+							"type": "alchemy65",
+							"request": "launch",
+							"name": "Debug rom with mesen",
+							"romPath": "${workspaceFolder}/${command:AskForRomPath}",
+							"dbgPath": "${workspaceFolder}/${command:AskForDbgPath}",
+							"mesenPath": "${workspaceFolder}/${command:AskForMesenPath}",
+							"stopOnEntry": true
+						}
+					}
+				],
+				"configurationAttributes": {
+					"launch": {
+						"required": [
+							"romPath",
+							"dbgPath",
+							"mesenPath"
+						],
+						"romPath": {
+							"type": "string",
+							"description": "Path to rom file.",
+							"default": "${workspaceFolder}/${command:AskForRomPath}"
+						},
+						"dbgPath": {
+							"type": "string",
+							"description": "Path to dbg file.",
+							"default": "${workspaceFolder}/${command:AskForDbgPath}"
+						},
+						"mesenPath": {
+							"type": "string",
+							"description": "Path to mesen.",
+							"default": "${workspaceFolder}/${command:AskForMesenPath}"
+						},
+						"stopOnEntry": {
+							"type": "boolean",
+							"description": "Automatically stop after launch.",
+							"default": true
+						}
+					}
+				}
+			}
+		],
+		"grammars": [
 			{
 				"language": "ca65",
 				"scopeName": "source.ca65",
 				"path": "./ca65.tmLanguage.json"
+			}
+		],
+		"breakpoints": [
+			{
+				"language": "ca65"
 			}
 		]
 	},
@@ -45,16 +130,20 @@
 		"test": "node ./out/test/runTest.js"
 	},
 	"devDependencies": {
-		"@types/vscode": "^1.61.0",
 		"@types/glob": "^7.1.4",
 		"@types/mocha": "^9.0.0",
 		"@types/node": "14.17.27",
+		"@types/vscode": "^1.61.0",
 		"@typescript-eslint/eslint-plugin": "^4.31.1",
 		"@typescript-eslint/parser": "^4.31.1",
+		"@vscode/test-electron": "^1.6.2",
 		"eslint": "^7.32.0",
 		"glob": "^7.1.7",
 		"mocha": "^9.1.1",
-		"typescript": "^4.4.3",
-		"@vscode/test-electron": "^1.6.2"
+		"typescript": "^4.4.3"
+	},
+	"dependencies": {
+		"await-notify": "^1.0.1",
+		"vscode-debugadapter": "^1.49.0"
 	}
 }
