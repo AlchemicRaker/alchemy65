@@ -133,6 +133,9 @@ function dataToScope(data: {[key: string]: string}): DbgScope {
         name: data.name,
         parent: data.parent ? Number.parseInt(data.parent) : undefined,
         size: data.size ? Number.parseInt(data.size) : undefined,
+        span: data.span ? data.span.split("+").map(s=>Number.parseInt(s)) : undefined,
+        sym: Number.parseInt(data.sym),
+        // type: Number.parseInt(data.type),
     };
 }
 
@@ -215,13 +218,35 @@ export function addressToSpans(dbg: DbgMap, address: number, cpuSpace: boolean):
     return spans;
 }
 
-export function spansToLines(dbg: DbgMap, spans: number[]): number[] {
-    const lines = dbg.line.filter(line => {
+export function spansToSpanLines(dbg: DbgMap, spans: number[]): {spans: DbgSpan[], line: DbgLine}[] {
+    const r: {spans: DbgSpan[], line: DbgLine}[] = dbg.line.flatMap(line => {
         if (!line.span) {
-            return false;
+            return [];
         }
-        return line.span.findIndex(span => spans.includes(span)) !== -1;
-    }).map(line => line.id);
-    return lines;
+        // spans for this line
+        const lineSpans = line.span.filter(span => spans.includes(span)).map(s=>dbg.span[s]);
+        return lineSpans.map(ls => {
+            return {
+                line,
+                spans: lineSpans,
+            };
+        });
+    });//.map(line => line.id);
+    return r;
+}
+
+export function spansToScopes(dbg: DbgMap, spanIds: number[]) {
+    const spans = spanIds.map(id=>dbg.span[id]);
+    return dbg.scope.filter(scope => {
+        //if one of the scope's spans include the linespans, match the scope
+        // const scopeSpans = this.debugFile?.span.filter(span => scope.span?.includes(span.id));
+        const scopeSpans = (scope.span || []).map(sid => dbg.span[sid]);
+
+        const matchedScopes = scopeSpans.filter(scopeSpan => {
+            // if any of the linespans are within this scopespan
+            return spans.filter(span => span.seg === scopeSpan.seg && scopeSpan.start <= span.start && span.start <= scopeSpan.start + scopeSpan.size).length > 0;
+        });
+        return matchedScopes.length > 0;
+    });
 }
 

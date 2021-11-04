@@ -13,7 +13,7 @@ import { EventEmitter } from 'stream';
 import { Message } from 'vscode-debugadapter/lib/messages';
 
 import { fstat } from 'fs';
-import { addressToSpans, DbgMap, readDebugFile, spansToLines } from './dbgService';
+import { addressToSpans, DbgMap, DbgScope, readDebugFile, spansToScopes, spansToSpanLines } from './dbgService';
 // import { Subject } from 'await-notify';
 const PORT = 4064;
 
@@ -147,10 +147,10 @@ class AlchemySocket {
 			pcPrg: Number.parseInt(pcPrg),
 		};
 	}
-	public async getLabel(label: string): Promise<{address: string, prgOffset: string, value: string}> {
-		const [address, prgOffset, value] = await waitForEvent(this.events, `label-${label}`, 1000, 
-			()=>this.socket.write(`getlabel ${label}\n`));
-		return {address, prgOffset, value};
+	public async getLabel(label: string, bytes: number): Promise<{address: string, prgOffset: string, values: string[]}> {
+		const [address, prgOffset, ...values] = await waitForEvent(this.events, `label-${label}`, 1000, 
+			()=>this.socket.write(`getlabel ${label} ${bytes}\n`));
+		return {address, prgOffset, values};
 	}
 	public setBreakpoints(breakpoints: {[key: string]: {cpu: number, prg: number}[]}) {
 		const points = Object.values(breakpoints).flatMap(x => x);
@@ -198,6 +198,25 @@ export class Alchemy65DebugSession extends DebugSession {
 		// const s = _session;
 		//read in the dbg file from
 		this.config = <Alchemy65Configuration> _session.configuration;
+	}
+
+	public async getSymbol(label: string): Promise<{address: string, prgOffset: string, value: string}> {
+		if(!this.alchemySocket || !this.debugFile) {
+			return {address: "-1", prgOffset: "-1", value: "-1"};
+		}
+
+		const symbolName = `"${label}"`;
+		const symbol = this.debugFile.sym.find(s => s.name === symbolName);
+		const size = symbol && symbol.size ? symbol.size : 1;
+
+		const {address, prgOffset, values} = await this.alchemySocket?.getLabel(label, Math.min(8, size));
+		const renderValue = (d: string) => {
+			const r = parseInt(d).toString(16).toUpperCase();
+			return r.length < 2 ? `0${r}` : r;
+		};
+		const value = values.map(v => renderValue(v)).join(" ");
+		const valueDecorate = size > 8 ? `${value} (...)` : value;
+		return {address, prgOffset, value: valueDecorate};
 	}
 	
 	protected async initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): Promise<void> {
@@ -328,6 +347,8 @@ export class Alchemy65DebugSession extends DebugSession {
 		};
 		this.sendResponse(response);
 	}
+
+	private stackFrames: DebugProtocol.StackFrame[] = [];
 	
 	protected async stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): Promise<void> {
 		if (!this.alchemySocket || !this.debugFile) {
@@ -342,75 +363,100 @@ export class Alchemy65DebugSession extends DebugSession {
 		const address = pcPrg !== -1 ? pcPrg : pc;
 
 		const spans = addressToSpans(this.debugFile, address, address === pc);
-		const lines = spansToLines(this.debugFile, spans).map(line => (<DbgMap> this.debugFile).line[line]);
-		if (lines.length <= 0) {
+		
+		const spanLines = spansToSpanLines(this.debugFile, spans);//.map(sl=>sl.line);
+		if (spanLines.length <= 0) {
 			response.body = {
 				stackFrames: []
 			};
 			this.sendResponse(response);
 			return;
 		}
-		if (lines.length > 1) {
+		if (spanLines.length > 1) {
 			const wait = 1;
 		}
-		// const line = lines[0];
-		// const file = this.debugFile.file[line.file];
-		// const filename = file.name.substr(1,file.name.length-2);
 
-		// response.body = {
-		// 	stackFrames: [
-		// 		{
-		// 			column: 0,
-		// 			line: line.line,
-		// 			id: 1,
-		// 			name: filename,
-		// 			source: {
-		// 				name: filename,
-		// 				path: `C:\\repos\\vnsrpg-framework\\${filename}`
-		// 			}
-		// 		}
-		// 	],
-		// 	//no totalFrames: 				// VS Code has to probe/guess. Should result in a max. of two requests
-		// 	totalFrames: 1			// stk.count is the correct size, should result in a max. of two requests
-		// 	//totalFrames: 1000000 			// not the correct size, should result in a max. of two requests
-		// 	//totalFrames: endFrame + 20 	// dynamically increases the size with every requested chunk, results in paging
-		// };
+		const childFinder: (scopes: DbgScope[]) => DbgScope | undefined = (scopes) => {
+			return scopes.find(scope => {
+				return scopes.findIndex(s => scope.id === s.parent) === -1;
+			});
+		};
 
-		
-		response.body = {
-			stackFrames: lines.map((line, index) => {
-				const file = (<DbgMap>this.debugFile).file[line.file];
-				const filename = file.name.substr(1,file.name.length-2);
-				return {
+		const unorderedFrames: {type: number, frame: DebugProtocol.StackFrame}[] = spanLines.map((spanLine, index) => {
+			const {line, spans} = spanLine;
+			const scopes = spansToScopes((<DbgMap>this.debugFile), spans.map(s=>s.id));
+			const topScope = childFinder(scopes);
+			const file = (<DbgMap>this.debugFile).file[line.file];
+			const filename = file.name.substr(1,file.name.length-2);
+			const type = line.type || -1;
+			const descriptor = type === -1 ? ""
+							 : type === 2 ? ` (macro)` // TODO: load the line to show as hint
+							 : ` (${type})`;
+			const name = topScope !== undefined ? `${topScope.name}${descriptor}` : `line ${line.line}${descriptor}`;
+
+			return {
+				frame:{
 					column: 0,
 					line: line.line,
-					id: index+1,
-					name: filename,
+					id: line.id,
+					name,
+					presentationHint: type === -1 ? 'normal' : 'subtle',
 					source: {
 						name: filename,
 						path: `C:\\repos\\vnsrpg-framework\\${filename}`,
 					}
-				};
-			}),
-			totalFrames: lines.length
+				},
+				type,
+			};
+		});
+
+		this.stackFrames = unorderedFrames.sort(({type:a},{type:b})=>a<b?-1:a>b?1:0).map(({frame})=>frame);
+		
+		response.body = { // TODO: order these stack frames, preferring primary source (line.type undefined)
+			stackFrames: this.stackFrames,
+			totalFrames: this.stackFrames.length
 		};
 		this.sendResponse(response);
 	}
 
 	protected scopesRequest(response: DebugProtocol.ScopesResponse, args: DebugProtocol.ScopesArguments): void {
+		//find what scopes intersect with
+		// args.frameId -- stackframe reference
+		const frameLine = this.stackFrames.find(frame => frame.id === args.frameId);
+		if (!this.alchemySocket || !this.debugFile || frameLine === undefined) {
+			response.body = {
+				scopes: [new Scope("CPU", 2, true)]
+			};
+			this.sendResponse(response);
+			return;
+		}
+
+		//get the line's segment(s) for a point of reference
+		const line = this.debugFile.line[frameLine.id];
+		const lineSpans = (line.span || []).map(span => (<DbgMap>this.debugFile).span[span]);
+
+		// const lineSegs = frameLine.
+
+		const scopes = spansToScopes(this.debugFile, line.span || []).map(scope => {
+			const name = scope.name.substr(1,scope.name.length-2);
+			const prettyName = name.length > 0 ? name : "(top)";
+			const mod = (<DbgMap>this.debugFile).mod[scope.mod];
+			return new Scope(`${mod.name.substr(1,mod.name.length-2)}-${prettyName}`,scope.id+10,true); //variable reference 0 is reserved
+		});
 
 		response.body = {
 			scopes: [
-				new Scope("Locals", 1, true),
+				// new Scope("Locals", 1, true),
 				new Scope("CPU", 2, true),
-				new Scope("RAM", 3, true),
+				// new Scope("RAM", 3, true),
+				...scopes,
 			]
 		};
 		this.sendResponse(response);
 	}
 
 	protected async variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments, request?: DebugProtocol.Request): Promise<void> {
-		if (!this.alchemySocket?.events) {
+		if (!this.alchemySocket?.events || !this.debugFile) {
 			response.body = {variables: []};
 			this.sendResponse(response);
 			return;
@@ -438,38 +484,50 @@ export class Alchemy65DebugSession extends DebugSession {
 			this.sendResponse(response);
 			return;
 		}
-		if (args.variablesReference === 3) { // RAM (anything labeled, including ranges? nest these?)
-			// request RAM info
-			const irqTableAddress = await this.alchemySocket.getLabel("irq_table_address");
-			const main = await this.alchemySocket.getLabel("main");
-			response.body = {
-				variables: []
-			};
-			const pushVar = (name: string, value: string) => {
-				response.body.variables.push({
-					name, value,
-					variablesReference: 0,
-					memoryReference: "vmemref"
-				});
-			};
-			pushVar("irq_table_address", irqTableAddress.value);
-			pushVar("main", main.value);
-			this.sendResponse(response);
-			return;
+		// if (args.variablesReference === 3) { // RAM (anything labeled, including ranges? nest these?)
+		// 	// request RAM info
+		// 	const irqTableAddress = await this.alchemySocket.getLabel("irq_table_address");
+		// 	const main = await this.alchemySocket.getLabel("main");
+		// 	response.body = {
+		// 		variables: []
+		// 	};
+		// 	const pushVar = (name: string, value: string) => {
+		// 		response.body.variables.push({
+		// 			name, value,
+		// 			variablesReference: 0,
+		// 			memoryReference: "vmemref"
+		// 		});
+		// 	};
+		// 	pushVar("irq_table_address", irqTableAddress.value);
+		// 	pushVar("main", main.value);
+		// 	this.sendResponse(response);
+		// 	return;
+		// }
+
+		// look up all symbols in the scope
+		const variables:DebugProtocol.Variable[] = [];
+		const syms = this.debugFile.sym.filter(sym => sym.scope === args.variablesReference-10 );
+
+		for (let index = 0; index < syms.length; index++) {
+			const sym = syms[index];//load_first_irq is failing
+			const v = await this.getSymbol(sym.name.substr(1,sym.name.length-2));
+			if (v.address === "-1") {
+				continue;
+			}
+			variables.push({
+				name: sym.name.substr(1,sym.name.length-2),
+				value: v.value,
+				variablesReference: 0,
+				memoryReference: "vmemref",
+				type: 'string',
+				evaluateName: sym.name.substr(1,sym.name.length-2)
+			});
 		}
 
-		// default stubby behavior:
 
 		// args.
 		response.body = {
-			variables: [
-				{
-					name: `vname-${args.variablesReference}`,
-					value: "vvalue",
-					variablesReference: 0,
-					memoryReference: "vmemref"
-				}
-			]
+			variables
 		};
 		this.sendResponse(response);
 	}
@@ -481,7 +539,7 @@ export class Alchemy65DebugSession extends DebugSession {
 			return;
 		}
 
-		const expression = await this.alchemySocket.getLabel(args.expression);
+		const expression = await this.getSymbol(args.expression);
 		response.body = {
 			result: expression.value,
 			variablesReference: 0

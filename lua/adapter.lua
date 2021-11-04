@@ -37,16 +37,17 @@ function onWhilePaused()
   alchemy65()
 end
 
-function memcallback(address)
+function xmemcallback(address)
         connection:send("isPaused true\n")
         log("breakpoint! " .. tostring(address))
         emu.breakExecution()
         return
 end
-function xmemcallback(address)
+function memcallback(address)
   --check if pc / prg is in the callback table
+  address = tonumber(address)
   local prg = emu.getPrgRomOffset(address)
-  if prg ~= -1 then
+  if prg ~= -1 and prg ~= nil then
     if breakpoints["prg-" .. tostring(prg)] ~= nil then
         connection:send("isPaused true\n")
         log("prg breakpoint!")
@@ -60,14 +61,14 @@ function xmemcallback(address)
         emu.breakExecution()
     return
   end
-  log("memcallback " .. tostring(address))
+  --log("memcallback " .. tostring(address))
   return
 end
 
 function clearbreakpoints()
   for k,ab in pairs(breakpoints) do
     local address = ab.a
-    log("clearing " .. tostring(k) .. " " .. tostring(address))
+    --log("clearing " .. tostring(k) .. " " .. tostring(address))
     emu.removeMemoryCallback(ab.b,emu.memCallbackType.cpuExec,ab.a)
     breakpoints[k] = nil
   end
@@ -77,12 +78,12 @@ function setbreakpoint(cpuaddress, prgaddress)
   local ab = {}
   ab.a = cpuaddress
   ab.b = emu.addMemoryCallback(memcallback, emu.memCallbackType.cpuExec, cpuaddress)
-  if prgaddress == -1 then
-    breakpoints["cpu-" .. tostring(cpuaddress)] = ab
-  else
-    breakpoints["prg-" .. tostring(prgaddress)] = ab
+  local k = "cpu-" .. tostring(cpuaddress)
+  if prgaddress ~= nil then
+    k = "prg-" .. tostring(prgaddress)
   end
-  log("sb " .. tostring(ab.b) .. " " .. tostring(cpuaddress))
+  breakpoints[k] = ab
+  --log("sb " .. k)
   return
 end
 
@@ -136,6 +137,7 @@ function alchemy65()
         connection:send("isPaused true\n")
         log("pause")
       else
+        connection:send("isPaused true\n")
         log("already paused")
       end
       
@@ -147,6 +149,7 @@ function alchemy65()
         connection:send("isPaused false\n")
         log("resume")
       else
+        connection:send("isPaused false\n")
         log("already resumed")
       end
       return
@@ -171,9 +174,20 @@ function alchemy65()
     end
     if command == "getlabel" then
       local label = args[2]
-      local label_address = emu.getLabelAddress(label)
-      local label_address_prg = emu.getPrgRomOffset(label_address)
-      local label_value = emu.read(label_address, emu.memType.cpuDebug)
+      local count = tonumber(args[3])
+      local label_address = -1
+      pcall(function() label_address = emu.getLabelAddress(label) end)
+      local label_address_prg = -1
+      local label_value = ""
+      if label_address ~= -1 then
+        label_address_prg = emu.getPrgRomOffset(label_address)
+        label_value = emu.read(label_address, emu.memType.cpuDebug)
+        local offset = 1
+        while offset < count do
+          label_value = label_value .. " " .. emu.read(label_address + offset, emu.memType.cpuDebug)
+          offset = offset + 1
+        end
+      end
       connection:send("label-" .. label .. " " .. tostring(label_address) .. " " .. tostring(label_address_prg) .. " " .. tostring(label_value) .. "\n")
       --log("getlabel " .. label)
       return
@@ -181,7 +195,7 @@ function alchemy65()
     
     if command == "clearbreakpoints" then
       clearbreakpoints()
-      log("clearbreakpoints " .. tablelength(breakpoints))
+      --log("clearbreakpoints " .. tablelength(breakpoints))
       return
     end
     
@@ -189,7 +203,7 @@ function alchemy65()
       local cpuaddress = tonumber(args[2])
       local prgaddress = tonumber(args[3])
       setbreakpoint(cpuaddress, prgaddress)
-      log("setbreakpoint " .. tablelength(breakpoints))
+      --log("setbreakpoint " .. tablelength(breakpoints))
       return
     end
     
