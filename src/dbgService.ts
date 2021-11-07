@@ -2,6 +2,7 @@ import { readFile } from 'fs/promises';
 
 export type AddrSize = 'zeropage' | 'absolute';
 export interface DbgMap {
+    csym: DbgCSym[],
     file: DbgFile[],
     line: DbgLine[],
     mod: DbgMod[],
@@ -58,7 +59,7 @@ export interface DbgScope {
     id: number,
     name: string,
     mod: number,
-    type?: 'scope',
+    type?: 'scope' | 'struct',
     size?: number,
     parent?: number,
     sym?: number
@@ -77,6 +78,16 @@ export interface DbgSym {
     seg?: number,
     type?: 'lab' | 'equ' | 'imp',
     exp?: number,
+}
+
+export interface DbgCSym {
+    // csym	id=0,name="pal_bg",scope=1,type=5,sc=ext,sym=487
+    id: number,
+    name: string,
+    scope: number,
+    type: number,
+    sc: 'ext',
+    sym: number,
 }
 
 export interface DbgType {
@@ -178,6 +189,17 @@ function dataToSym(data: {[key: string]: string}): DbgSym {
     };
 }
 
+function dataToCSym(data: {[key: string]: string}): DbgCSym {
+    return {
+        id: Number.parseInt(data.id),
+        name: data.name,
+        scope: Number.parseInt(data.scope),
+        type: Number.parseInt(data.type),
+        sc: 'ext',
+        sym: Number.parseInt(data.sym),
+    };
+}
+
 function dataToType(data: {[key: string]: string}): DbgType {
     return {
         id: Number.parseInt(data.id),
@@ -192,6 +214,7 @@ export async function readDebugFile(path: string): Promise<DbgMap> {
     const lines = lineStrings.map(lineToData);
     const filterName = (fName: string) => lines.filter(({name})=>name===fName).map(({body})=>body);
     const map: DbgMap = { // TODO maybe, sort by id (should already be ordered)
+        csym: filterName("csym").map(dataToCSym),
         file: filterName("file").map(dataToFile),
         line: filterName("line").map(dataToLine),
         mod: filterName("mod").map(dataToMod),

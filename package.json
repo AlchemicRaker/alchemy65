@@ -19,12 +19,6 @@
 	],
 	"main": "./out/extension.js",
 	"contributes": {
-		"commands": [
-			{
-				"command": "alchemy65.helloWorld",
-				"title": "Hello World"
-			}
-		],
 		"languages": [
 			{
 				"id": "ca65",
@@ -37,13 +31,25 @@
 					".inc"
 				],
 				"configuration": "./ca65-language-config.json"
+			},
+			{
+				"id": "cc65",
+				"aliases": [
+					"cc65 Transpiler"
+				],
+				"extensions": [
+					".c",
+					".h"
+				],
+				"configuration": "./cc65-language-config.json"
 			}
 		],
 		"debuggers": [
 			{
 				"type": "alchemy65",
 				"languages": [
-					"ca65"
+					"ca65",
+					"cc65"
 				],
 				"label": "Alchemy65 Debug",
 				"variables": {
@@ -113,11 +119,19 @@
 				"language": "ca65",
 				"scopeName": "source.ca65",
 				"path": "./ca65.tmLanguage.json"
+			},
+			{
+				"language": "cc65",
+				"scopeName": "source.cc65",
+				"path": "./cc65.tmLanguage.json"
 			}
 		],
 		"breakpoints": [
 			{
 				"language": "ca65"
+			},
+			{
+				"language": "cc65"
 			}
 		]
 	},

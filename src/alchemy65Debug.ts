@@ -17,6 +17,18 @@ import { addressToSpans, DbgMap, DbgScope, readDebugFile, spansToScopes, spansTo
 // import { Subject } from 'await-notify';
 const PORT = 4064;
 
+class AllStoppedEvent extends Event implements StoppedEvent {
+	constructor(reason: string) {
+		super("stopped");
+		this.body = {
+			reason,
+		};
+		this.allThreadsStopped = true;
+	}
+	body: { reason: string; };
+	allThreadsStopped: boolean;
+}
+
 class ExitedEvent extends Event implements DebugProtocol.ExitedEvent {
 	body: {
         exitCode: number
@@ -208,20 +220,21 @@ export class Alchemy65DebugSession extends DebugSession {
 		const symbolName = `"${label}"`;
 		const symbol = this.debugFile.sym.find(s => s.name === symbolName && s.type !== "imp");
 
-		if(symbol && symbol.val && symbol.val.length >= 3) {
-			const valTrim = symbol.val.substr(2); // remove the 0x prefix
-			const valPad = valTrim.length % 2 === 1 ? `0${valTrim}` : valTrim; // force an even number of chars
-			const values = [];
-			for (let i = 0; i < valPad.length; i+=2) {
-				values.push(valPad.substr(i, 2));
-			}
-			return {address: "-2", prgOffset: "-1", value: values.join(" ")};
-		}
-
 		const size = symbol && symbol.size ? symbol.size : 1;
 
 		const {address, prgOffset, values} = await this.alchemySocket?.getLabel(label, Math.min(8, size));
 		if(values.length === 1 && values[0] === '') {
+			
+			if(symbol && symbol.val && symbol.val.length >= 3) {
+				const valTrim = symbol.val.substr(2); // remove the 0x prefix
+				const valPad = valTrim.length % 2 === 1 ? `0${valTrim}` : valTrim; // force an even number of chars
+				const values = [];
+				for (let i = 0; i < valPad.length; i+=2) {
+					values.push(valPad.substr(i, 2));
+				}
+				return {address: "-2", prgOffset: "-1", value: values.join(" ")};
+			}
+			
 			return {address: "-1", prgOffset: "-1", value: ""};
 		}
 		const renderValue = (d: string) => {
@@ -263,11 +276,15 @@ export class Alchemy65DebugSession extends DebugSession {
 		});
 		this.alchemySocket.events.on('isPaused', (isPaused: string) => {
 			if(isPaused === "true") {
-				this.sendEvent(new StoppedEvent('pause', 2));
+				this.sendEvent(new AllStoppedEvent('pause'));
+				this.sendEvent(new StoppedEvent('pause',2));
+				this.sendEvent(new StoppedEvent('pause',1));
 			}
 		});
 		this.alchemySocket.events.on('stepped', () => {
-			this.sendEvent(new StoppedEvent('step', 2));
+			this.sendEvent(new AllStoppedEvent('step'));
+			this.sendEvent(new StoppedEvent('step',2));
+			this.sendEvent(new StoppedEvent('step',1));
 		});
 		// TODO: wait for the socket to connect
 		try{
@@ -356,13 +373,14 @@ export class Alchemy65DebugSession extends DebugSession {
 		// only 1 or 2 threads, for the assembly and c stacks
 		response.body = {
 			threads: [
-				new Thread(2, "alchemy65 thread")
+				new Thread(1, "c thread"),
+				new Thread(2, "asm thread")
 			]
 		};
 		this.sendResponse(response);
 	}
 
-	private stackFrames: DebugProtocol.StackFrame[] = [];
+	private stackFrames: {type: number, frame: DebugProtocol.StackFrame}[] = [];
 	
 	protected async stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): Promise<void> {
 		if (!this.alchemySocket || !this.debugFile) {
@@ -372,6 +390,7 @@ export class Alchemy65DebugSession extends DebugSession {
 			this.sendResponse(response);
 			return;
 		}
+		
 		// for now, the stack is flat and only contains the pc
 		const {pc, pcPrg} = await this.alchemySocket.getCpuVars();
 		const address = pcPrg !== -1 ? pcPrg : pc;
@@ -403,32 +422,51 @@ export class Alchemy65DebugSession extends DebugSession {
 			const file = (<DbgMap>this.debugFile).file[line.file];
 			const filename = file.name.substr(1,file.name.length-2);
 			const type = line.type || -1;
-			const descriptor = type === -1 ? ""
+			const descriptor = type === -1 ? "(asm)"
+							 : type === 1 ? ` (c)`
 							 : type === 2 ? ` (macro)` // TODO: load the line to show as hint
 							 : ` (${type})`;
 			const name = topScope !== undefined ? `${topScope.name}${descriptor}` : `line ${line.line}${descriptor}`;
 
 			return {
-				frame:{
+				frame: {
 					column: 0,
 					line: line.line,
 					id: line.id,
 					name,
-					presentationHint: type === -1 ? 'normal' : 'subtle',
+					presentationHint: 'normal', //type === -1 ? 'normal' : 'subtle',
 					source: {
 						name: filename,
-						path: `C:\\repos\\vnsrpg-framework\\${filename}`,
+						path: `C:\\repos\\01_Hello\\${filename}`,
 					}
 				},
 				type,
 			};
 		});
 
-		this.stackFrames = unorderedFrames.sort(({type:a},{type:b})=>a<b?-1:a>b?1:0).map(({frame})=>frame);
+		const orderedFrames = unorderedFrames.sort(({type:a},{type:b})=>{
+			if(a === 1) { return -1; }
+			if(b === 1) { return 1; }
+
+			return a<b?-1:a>b?1:0;
+		});
+
+		this.stackFrames = orderedFrames;
+
+		const filteredFrames = this.stackFrames.filter(sf => {
+			if(args.threadId === 1) {
+				return sf.type === 1;
+			} else if(args.threadId === 2) {
+				return sf.type !== 1;
+			} else {
+				const x = 5;
+				return true;
+			}
+		}).map(f => f.frame);
 		
 		response.body = { // TODO: order these stack frames, preferring primary source (line.type undefined)
-			stackFrames: this.stackFrames,
-			totalFrames: this.stackFrames.length
+			stackFrames: filteredFrames,
+			totalFrames: filteredFrames.length,
 		};
 		this.sendResponse(response);
 	}
@@ -436,7 +474,7 @@ export class Alchemy65DebugSession extends DebugSession {
 	protected scopesRequest(response: DebugProtocol.ScopesResponse, args: DebugProtocol.ScopesArguments): void {
 		//find what scopes intersect with
 		// args.frameId -- stackframe reference
-		const frameLine = this.stackFrames.find(frame => frame.id === args.frameId);
+		const frameLine = this.stackFrames.find(frame => frame.frame.id === args.frameId);
 		if (!this.alchemySocket || !this.debugFile || frameLine === undefined) {
 			response.body = {
 				scopes: [new Scope("CPU", 2, true)]
@@ -446,7 +484,7 @@ export class Alchemy65DebugSession extends DebugSession {
 		}
 
 		//get the line's segment(s) for a point of reference
-		const line = this.debugFile.line[frameLine.id];
+		const line = this.debugFile.line[frameLine.frame.id];
 		const lineSpans = (line.span || []).map(span => (<DbgMap>this.debugFile).span[span]);
 
 		// const lineSegs = frameLine.
@@ -523,7 +561,17 @@ export class Alchemy65DebugSession extends DebugSession {
 		const syms = this.debugFile.sym.filter(sym => sym.scope === args.variablesReference-10 );
 
 		for (let index = 0; index < syms.length; index++) {
-			const sym = syms[index];//load_first_irq is failing
+			const sym = syms[index];
+			// // if the symbol is nestable (a struct), allow it to be explored
+			// if(sym.scope){
+			// 	const scope = this.debugFile.scope[sym.scope];
+			// 	if(scope.type === "struct") {
+			// 		variables.push({
+			// 			name: sym.name.substr(1,sym.name.length-2),
+						
+			// 		})
+			// 	}
+			// }
 			const v = await this.getSymbol(sym.name.substr(1,sym.name.length-2));
 			if (v.address === "-1") {
 				continue;
@@ -584,7 +632,7 @@ export class Alchemy65DebugSession extends DebugSession {
 		
 		//clear debugger breakpoints for this source and assign new ones
 		//TODO: this is terrible
-		const workspace = "C:\\repos\\vnsrpg-framework\\";
+		const workspace = "C:\\repos\\01_Hello\\";
 		const normalizePath = args.source.path.substr(workspace.length).replace("\\","/");
 		const file = this.debugFile.file.find(file => file.name === `"${normalizePath}"`);
 
