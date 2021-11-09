@@ -1,5 +1,4 @@
-﻿
---Start listening for the Alchemy65 connection
+﻿--Start listening for the Alchemy65 connection
 
 local socket = require("socket.core")
 local PORT = 4064
@@ -8,6 +7,7 @@ local server = nil
 local connection = nil
 local isPaused = false
 local breakpoints = {}
+local delayCommand = nil
 
 function tablelength(T)
   local count = 0
@@ -88,6 +88,24 @@ function setbreakpoint(cpuaddress, prgaddress)
 end
 
 function alchemy65()
+  if delayCommand == "reset" then
+    delayCommand = nil
+    emu.reset()
+    emu.resume()
+    log("reset")
+    return
+  end
+  if delayCommand == "resetBreak" then
+    delayCommand = nil
+    if isPaused == true then
+      emu.resume()
+    end
+    emu.reset()
+    emu.breakExecution()
+    connection:send("isPaused true\n")
+    log("resetBreak")
+    return
+  end
   if connection == nil then
     local client, err = server:accept()
     if client ~= nil then
@@ -131,6 +149,14 @@ function alchemy65()
     local command = args[1]
     --log(command)
 
+    if command == "pauseCheck" then
+      if isPaused then
+        connection:send("isPaused true\n")
+      else
+        connection:send("isPaused false\n")
+      end
+      return
+    end
     if command == "pause" then
       if isPaused == false then
         emu.breakExecution()
@@ -155,8 +181,25 @@ function alchemy65()
       return
     end
     if command == "reset" then
+      if isPaused == true then
+        emu.resume()
+      end
+      delayCommand = "reset"
+      return
+    end
+    if command == "resetBreak" then
+      if isPaused == true then
+        emu.resume()
+      end
+      delayCommand = "resetBreak"
+      return
+    end
+    if command == "resetBreakNow" then
+      emu.breakExecution()
       emu.reset()
-      log("reset")
+      emu.breakExecution()
+      connection:send("isPaused true\n")
+      log("resetBreak")
       return
     end
     if command == "next" then
@@ -213,6 +256,14 @@ function alchemy65()
   end
 end
 
+-- function onInit()
+--   emu.removeEventCallback(onInit, emu.eventType.endFrame)
+--   emu.removeEventCallback(onInit, emu.eventType.whilePaused)
+--   emu.addEventCallback(onEndFrame, emu.eventType.endFrame)
+--   emu.addEventCallback(onWhilePaused, emu.eventType.whilePaused)
+--   emu.breakExecution()
+--   onEndFrame()
+-- end
 
 log("init...")
 server = socket.tcp();
@@ -224,10 +275,12 @@ if listen_err ~= nil then
   log("Listen Error:" .. listen_err)
 else
   server:settimeout(FAST) -- make accepts fast
-
-  log("listening on " .. PORT)
+  -- emu.addEventCallback(onInit, emu.eventType.endFrame)
+  -- emu.addEventCallback(onInit, emu.eventType.whilePaused)
   emu.addEventCallback(onEndFrame, emu.eventType.endFrame)
   emu.addEventCallback(onWhilePaused, emu.eventType.whilePaused)
+
+  log("listening on " .. PORT)
   -- while true do
   --   alchemy65()
   -- end

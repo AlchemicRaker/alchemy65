@@ -13,7 +13,10 @@ import { EventEmitter } from 'stream';
 import { Message } from 'vscode-debugadapter/lib/messages';
 
 import { fstat } from 'fs';
+import { access } from 'fs/promises';
 import { addressToSpans, DbgMap, DbgScope, readDebugFile, spansToScopes, spansToSpanLines } from './dbgService';
+import path = require('path');
+import { ChildProcess, ChildProcessWithoutNullStreams, spawn } from 'child_process';
 // import { Subject } from 'await-notify';
 const PORT = 4064;
 
@@ -39,6 +42,35 @@ class ExitedEvent extends Event implements DebugProtocol.ExitedEvent {
 			exitCode
 		};
     }
+}
+
+class CustomProgressStartEvent extends Event implements DebugProtocol.ProgressStartEvent {
+    body: {
+        progressId: string;
+        title: string;
+		message?: string;
+		percentage?: number;
+    };
+    constructor(progressId: string, title: string, message?: string, percentage?: number){
+		super('progressStart');
+        this.body = {
+            progressId, title, message, percentage,
+        };
+	}
+}
+
+class CustomProgressUpdateEvent extends Event implements DebugProtocol.ProgressUpdateEvent {
+	body: {
+        progressId: string;
+		message?: string;
+		percentage?: number;
+    };
+    constructor(progressId: string, message?: string, percentage?: number) {
+		super('progressUpdate');
+        this.body = {
+            progressId, message, percentage,
+        };
+	}
 }
 
 export function timeout(time: number) {
@@ -81,14 +113,15 @@ interface CpuVars {
 class AlchemySocket {
 	public readonly connectPromise: Promise<void>;
 	public readonly configuredPromise: Promise<void>;
-	public readonly socket: Socket;
+	public socket: Socket;
 	public readonly events: EventEmitter;
+	public isConnected: boolean = false;
 	constructor() {
 		this.socket = new Socket();
 		this.events = new EventEmitter();
 		// this.events.on('isPaused', )
 		this.connectPromise = new Promise((resolve) => {
-			this.socket.on('connect', () => {
+			this.socket.once('connect', () => {
 				resolve();
 			});
 		});
@@ -99,16 +132,19 @@ class AlchemySocket {
 			});
 		});
 		this.socket.on('connect', () => {
+			this.isConnected = true;
 			console.log('connected');
 		});
 		this.socket.on('error', (err:Error) => {
 			console.log(err);
 		});
 		this.socket.on('end', () => {
+			this.isConnected = false;
 			console.log('end');
 			this.events.emit('exit');
 		});
 		this.socket.on('close', () => {
+			this.isConnected = false;
 			console.log('close');
 			this.events.emit('exit');
 		});
@@ -131,14 +167,26 @@ class AlchemySocket {
 		});
 		this.socket.connect(PORT, "127.0.0.1");
 	}
+	public tryConnect() {
+		this.socket.connect(PORT, "127.0.0.1");
+	}
 	public pause() {
 		this.socket.write("pause\n");
+	}
+	public pauseCheck() {
+		this.socket.write("pauseCheck\n");
 	}
 	public resume() {
 		this.socket.write("resume\n");
 	}
 	public reset() {
 		this.socket.write("reset\n");
+	}
+	public resetBreak() {
+		this.socket.write("resetBreak\n");
+	}
+	public resetBreakNow() {
+		this.socket.write("resetBreakNow\n");
 	}
 	public next() {
 		this.socket.write("next\n");
@@ -173,12 +221,26 @@ class AlchemySocket {
 	}
 }
 
+interface IAttachRequestArguments extends DebugProtocol.AttachRequestArguments {
+	dbgPath: string;
+	/** Automatically stop target after launch. If not specified, target does not stop. */
+	stopOnEntry: boolean;
+	resetOnEntry: boolean;
+	/** enable logging the Debug Adapter Protocol */
+	trace?: boolean;
+	/** run without debugging */
+	noDebug?: boolean;
+	/** if specified, results in a simulated compile error in launch. */
+	compileError?: 'default' | 'show' | 'hide';
+}
+
 interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	romPath: string;
 	dbgPath: string;
 	mesenPath: string;
 	/** Automatically stop target after launch. If not specified, target does not stop. */
-	stopOnEntry?: boolean;
+	stopOnEntry: boolean;
+	resetOnEntry: boolean;
 	/** enable logging the Debug Adapter Protocol */
 	trace?: boolean;
 	/** run without debugging */
@@ -190,7 +252,8 @@ interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 interface Alchemy65Configuration extends vscode.DebugConfiguration {
 	dbgPath: string;
 	romPath: string;
-	mesenPath: string;
+	program: string;
+	sourcePath: string;
 }
 
 export class Alchemy65DebugSession extends DebugSession {
@@ -201,10 +264,13 @@ export class Alchemy65DebugSession extends DebugSession {
 	private launchedSuccessfully: boolean;
 	private config: Alchemy65Configuration;
 	private debugFile?: DbgMap;
+	private context: vscode.ExtensionContext;
+	private program: ChildProcessWithoutNullStreams | undefined;
 
-	public constructor(_session: vscode.DebugSession) {
+	public constructor(context: vscode.ExtensionContext, _session: vscode.DebugSession) {
 		super();
 		this.launchedSuccessfully = false;
+		this.context = context;
 		// _session.configuration.request
 		// handle 'launch' and 'attach'
 		// const s = _session;
@@ -312,25 +378,96 @@ export class Alchemy65DebugSession extends DebugSession {
 		// notify the launchRequest that configuration has finished
 		// this._configurationDone.notify();
 	}
-	
-	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: ILaunchRequestArguments) {
 
-		// make sure to 'Stop' the buffered logging if 'trace' is not set
+	protected async attachRequest(response: DebugProtocol.AttachResponse, args: IAttachRequestArguments, request?: DebugProtocol.Request): Promise<void> {
 		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
 
-		// wait until configuration has finished (and configurationDoneRequest has been called)
-		// await this._configurationDone.wait(1000);
-		// await this.alchemySocket?.configuredPromise;
 		let isConfigured = false;
-		await Promise.race([this.alchemySocket?.configuredPromise.then(()=>isConfigured=true), timeout(1000)]);
+		let retry = 0;
+		const retryLimit = 10;
 
-		// start the program in the runtime
-		// await this._runtime.start(args.program, !!args.stopOnEntry, !args.noDebug);
+		const progressStart = new CustomProgressStartEvent("attaching", "Establishing connection with debugger...", undefined, 0);
 
+		this.sendEvent(progressStart);
+		while(retry < retryLimit) {
+			await Promise.race([
+				this.alchemySocket?.configuredPromise.then(()=>isConfigured=true), 
+				timeout(500),
+			]);
+
+			if(isConfigured) {
+				break;
+			}
+			const progressUpdate = new CustomProgressUpdateEvent("attaching", undefined, 1/retryLimit*retry);
+			this.sendEvent(progressUpdate);
+
+			this.alchemySocket?.tryConnect();
+
+			retry++;
+		}
+		this.sendEvent(new ProgressEndEvent("attaching"));
+		
+		if(!isConfigured) {
+			// this.alchemySocket?.stop();
+			return this.sendEvent(new TerminatedEvent(false));
+		}
+		this.launchedSuccessfully = true;
+		this.sendResponse(response);
+		this.alchemySocket?.setBreakpoints(this.breakpoints);
+		if(args.resetOnEntry && args.stopOnEntry) {
+			this.alchemySocket?.resetBreak();
+		} else if (args.resetOnEntry) {
+			this.alchemySocket?.reset();
+		} else if (args.stopOnEntry) {
+			this.alchemySocket?.pause();
+		}
+		this.alchemySocket?.pauseCheck();
+	}
+	
+	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: ILaunchRequestArguments) {
+		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
+
+		const programExists = await access(this.config.program).then(()=>true).catch(()=>false);
+		if(!programExists) {
+			this.sendErrorResponse(response, {
+				id: 1001,
+				format: `launch error: unable to locate emulator`,
+				showUser: true
+			});
+			return;
+		}
+		const spawnArgs = [
+			this.config.romPath,
+			this.context.asAbsolutePath("lua/adapter.lua"),
+		];
+		this.program = spawn(this.config.program, spawnArgs);
+
+		let isConfigured = false;
+		let retry = 0;
+		const retryLimit = 30;
+
+		const progressStart = new CustomProgressStartEvent("attaching", "Establishing connection with debugger...", undefined, 0);
+
+		this.sendEvent(progressStart);
+		while(retry < retryLimit) {
+			await Promise.race([
+				this.alchemySocket?.configuredPromise.then(()=>isConfigured=true), 
+				timeout(500),
+			]);
+
+			if(isConfigured) {
+				break;
+			}
+			const progressUpdate = new CustomProgressUpdateEvent("attaching", undefined, 1/retryLimit*retry);
+			this.sendEvent(progressUpdate);
+
+			this.alchemySocket?.tryConnect();
+
+			retry++;
+		}
+		this.sendEvent(new ProgressEndEvent("attaching"));
+		
 		if (!isConfigured) {
-			// simulate a compile/build error in "launch" request:
-			// the error should not result in a modal dialog since 'showUser' is set to false.
-			// A missing 'showUser' should result in a modal dialog.
 			this.sendErrorResponse(response, {
 				id: 1001,
 				format: `connection error: unable to connect to alchemy65 debug host`,
@@ -339,6 +476,18 @@ export class Alchemy65DebugSession extends DebugSession {
 		} else {
 			this.launchedSuccessfully = true;
 			this.sendResponse(response);
+			if(args.resetOnEntry && args.stopOnEntry) {
+				this.alchemySocket?.resetBreak();
+				this.alchemySocket?.setBreakpoints(this.breakpoints);
+			} else if (args.resetOnEntry) {
+				this.alchemySocket?.setBreakpoints(this.breakpoints);
+				this.alchemySocket?.reset();
+			} else if (args.stopOnEntry) {
+				this.alchemySocket?.setBreakpoints(this.breakpoints);
+				this.alchemySocket?.pause();
+			} else {
+				this.alchemySocket?.setBreakpoints(this.breakpoints);
+			}
 		}
 	}
 
@@ -361,10 +510,32 @@ export class Alchemy65DebugSession extends DebugSession {
 		this.sendResponse(response);
 	}
 
-	protected terminateRequest(response: DebugProtocol.TerminateResponse, args: DebugProtocol.TerminateArguments, request?: DebugProtocol.Request): void {
+	protected async disconnectRequest(response: DebugProtocol.DisconnectResponse, args: DebugProtocol.DisconnectArguments, request?: DebugProtocol.Request): Promise<void> {
 		this.alchemySocket?.stop();
 		response.body = {};
 		this.sendResponse(response);
+		this.sendEvent(new TerminatedEvent());
+	}
+
+	protected async terminateRequest(response: DebugProtocol.TerminateResponse, args: DebugProtocol.TerminateArguments, request?: DebugProtocol.Request): Promise<void> {
+		this.alchemySocket?.stop();
+		response.body = {};
+		this.sendResponse(response);
+		if(this.program) {
+			const program = this.program;
+			try{
+				const waitUntilClose = new Promise<void>((resolve) => {
+					program.on("close",() => resolve());
+					setTimeout(()=>resolve(),10*1000);
+				});
+				
+				this.program.kill();
+
+				await waitUntilClose;
+			}catch(e) {
+
+			}
+		}
 		this.sendEvent(new TerminatedEvent());
 	}
 
@@ -437,7 +608,7 @@ export class Alchemy65DebugSession extends DebugSession {
 					presentationHint: 'normal', //type === -1 ? 'normal' : 'subtle',
 					source: {
 						name: filename,
-						path: `C:\\repos\\01_Hello\\${filename}`,
+						path: path.join(this.config.sourcePath, filename),
 					}
 				},
 				type,
@@ -632,7 +803,7 @@ export class Alchemy65DebugSession extends DebugSession {
 		
 		//clear debugger breakpoints for this source and assign new ones
 		//TODO: this is terrible
-		const workspace = "C:\\repos\\01_Hello\\";
+		const workspace = this.config.sourcePath;
 		const normalizePath = args.source.path.substr(workspace.length).replace("\\","/");
 		const file = this.debugFile.file.find(file => file.name === `"${normalizePath}"`);
 

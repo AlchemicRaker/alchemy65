@@ -37,11 +37,20 @@ export function activateAlchemy65Debug(context: vscode.ExtensionContext) {
             }
         });//.then(result => result !== undefined && result.length > 0 ? result[0].path : undefined );
     }));
+    
+    context.subscriptions.push(vscode.commands.registerCommand("extension.alchemy65.getSourcePath", _ => {
+        return vscode.window.showOpenDialog({
+            canSelectFiles: false,
+			canSelectFolders: true,
+            title: "Select the base source folder",
+            openLabel: "Select source folder",
+        });//.then(result => result !== undefined && result.length > 0 ? result[0].path : undefined );
+    }));
 
     context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('alchemy65', new Alchemy65ConfigurationProvider()));
 
 	
-	const factory: vscode.DebugAdapterDescriptorFactory = new InlineDebugAdapterFactory();
+	const factory: vscode.DebugAdapterDescriptorFactory = new InlineDebugAdapterFactory(context);
 	context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('alchemy65', factory));
 }
 
@@ -80,11 +89,31 @@ class Alchemy65ConfigurationProvider implements vscode.DebugConfigurationProvide
 			});
 		}
 
-		if (!config.mesenPath) {
+		if (!config.program) {
 			return vscode.window.showInformationMessage("Cannot find a mesen path").then(_config => {
 				return undefined;	// abort launch
 			});
 		}
+
+		if (!config.sourcePath) {
+			return vscode.window.showInformationMessage("Cannot find a source path").then(_config => {
+				return undefined;	// abort launch
+			});
+		}
+
+		if (!config.remoteAddress) {
+			config.remoteAddress = "127.0.0.1";
+		}
+		if (!config.remotePort) {
+			config.remotePort = 4064;
+		}
+		if (config.stopOnEntry === undefined) {
+			config.stopOnEntry = config.request === "launch";
+		}
+		if (config.resetOnEntry === undefined) {
+			config.resetOnEntry = config.request === "launch";
+		}
+		
 
 		return config;
 	}
@@ -92,7 +121,12 @@ class Alchemy65ConfigurationProvider implements vscode.DebugConfigurationProvide
 
 class InlineDebugAdapterFactory implements vscode.DebugAdapterDescriptorFactory {
 
+	context: vscode.ExtensionContext;
+	constructor(context: vscode.ExtensionContext) {
+		this.context = context;
+	}
+
 	createDebugAdapterDescriptor(_session: vscode.DebugSession): ProviderResult<vscode.DebugAdapterDescriptor> {
-		return new vscode.DebugAdapterInlineImplementation(new Alchemy65DebugSession(_session));
+		return new vscode.DebugAdapterInlineImplementation(new Alchemy65DebugSession(this.context, _session));
 	}
 }

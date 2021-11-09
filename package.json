@@ -11,11 +11,11 @@
 	],
 	"activationEvents": [
 		"onDebugResolve:alchemy65",
-		"onDebugDynamicConfigurations:alchemy65",
 		"onCommand:alchemy65.helloWorld",
 		"onCommand:extension.alchemy65.getRomPath",
 		"onCommand:extension.alchemy65.getDbgPath",
-		"onCommand:extension.alchemy65.getMesenPath"
+		"onCommand:extension.alchemy65.getMesenPath",
+		"onCommand:extension.alchemy65.getSourcePath"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -55,17 +55,20 @@
 				"variables": {
 					"AskForRomPath": "extension.alchemy65.getRomPath",
 					"AskForDbgPath": "extension.alchemy65.getDbgPath",
-					"AskForMesenPath": "extension.alchemy65.getMesenPath"
+					"AskForMesenPath": "extension.alchemy65.getMesenPath",
+					"AskForSourcePath": "extension.alchemy65.getSourcePath"
 				},
 				"initialConfigurations": [
 					{
 						"type": "alchemy65",
 						"request": "launch",
 						"name": "Debug rom with mesen",
-						"romPath": "${workspaceFolder}/${command:AskForRomPath}",
-						"dbgPath": "${workspaceFolder}/${command:AskForDbgPath}",
-						"mesenPath": "${workspaceFolder}/${command:AskForMesenPath}",
-						"stopOnEntry": true
+						"romPath": "${workspaceFolder}/game.nes",
+						"dbgPath": "${workspaceFolder}/game.dbg",
+						"program": "${workspaceFolder}/path/to/mesen.exe",
+						"sourcePath": "${workspaceFolder}/",
+						"stopOnEntry": true,
+						"resetOnEntry": true
 					}
 				],
 				"configurationSnippets": [
@@ -76,10 +79,25 @@
 							"type": "alchemy65",
 							"request": "launch",
 							"name": "Debug rom with mesen",
-							"romPath": "${workspaceFolder}/${command:AskForRomPath}",
-							"dbgPath": "${workspaceFolder}/${command:AskForDbgPath}",
-							"mesenPath": "${workspaceFolder}/${command:AskForMesenPath}",
-							"stopOnEntry": true
+							"romPath": "^\"\\${workspaceFolder}/game.nes\"",
+							"dbgPath": "^\"\\${workspaceFolder}/game.dbg\"",
+							"program": "^\"\\${workspaceFolder}/path/to/mesen.exe\"",
+							"sourcePath": "^\"\\${workspaceFolder}/\"",
+							"stopOnEntry": true,
+							"resetOnEntry": true
+						}
+					},
+					{
+						"label": "Alchemy65 Debug: Attach",
+						"description": "A new configuration for 'debugging' a rom.",
+						"body": {
+							"type": "alchemy65",
+							"request": "attach",
+							"name": "Debug rom with mesen",
+							"dbgPath": "^\"\\${workspaceFolder}/game.dbg\"",
+							"sourcePath": "^\"\\${workspaceFolder}/\"",
+							"stopOnEntry": false,
+							"resetOnEntry": false
 						}
 					}
 				],
@@ -88,7 +106,8 @@
 						"required": [
 							"romPath",
 							"dbgPath",
-							"mesenPath"
+							"program",
+							"sourcePath"
 						],
 						"romPath": {
 							"type": "string",
@@ -100,15 +119,71 @@
 							"description": "Path to dbg file.",
 							"default": "${workspaceFolder}/${command:AskForDbgPath}"
 						},
-						"mesenPath": {
+						"program": {
 							"type": "string",
 							"description": "Path to mesen.",
 							"default": "${workspaceFolder}/${command:AskForMesenPath}"
 						},
+						"sourcePath": {
+							"type": "string",
+							"description": "Path to source code.",
+							"default": "${workspaceFolder}/${command:AskForSourcePath}"
+						},
 						"stopOnEntry": {
 							"type": "boolean",
 							"description": "Automatically stop after launch.",
+							"default": false
+						},
+						"resetOnEntry": {
+							"type": "boolean",
+							"description": "Automatically reset after launch.",
 							"default": true
+						}
+					},
+					"attach": {
+						"required": [
+							"dbgPath",
+							"sourcePath"
+						],
+						"romPath": {
+							"type": "string",
+							"description": "Path to rom file.",
+							"default": "${workspaceFolder}/${command:AskForRomPath}"
+						},
+						"dbgPath": {
+							"type": "string",
+							"description": "Path to dbg file.",
+							"default": "${workspaceFolder}/${command:AskForDbgPath}"
+						},
+						"program": {
+							"type": "string",
+							"description": "Path to mesen.",
+							"default": "${workspaceFolder}/${command:AskForMesenPath}"
+						},
+						"sourcePath": {
+							"type": "string",
+							"description": "Path to source code.",
+							"default": "${workspaceFolder}/${command:AskForSourcePath}"
+						},
+						"stopOnEntry": {
+							"type": "boolean",
+							"description": "Automatically stop after attaching.",
+							"default": false
+						},
+						"resetOnEntry": {
+							"type": "boolean",
+							"description": "Automatically reset after attaching.",
+							"default": false
+						},
+						"remoteAddress": {
+							"type": "string",
+							"description": "Network address to locate the debugger.",
+							"default": "127.0.0.1"
+						},
+						"remotePort": {
+							"type": "number",
+							"description": "Network port to locate the debugger.",
+							"default": 4064
 						}
 					}
 				}
