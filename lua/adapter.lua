@@ -56,6 +56,9 @@ function xmemcallback(address)
         return
 end
 function memcallback(address)
+  if delayCommand ~= nil then
+    return
+  end
   --check if pc / prg is in the callback table
   address = tonumber(address)
   local prg = emu.getPrgRomOffset(address)
@@ -86,8 +89,9 @@ function clearbreakpoints()
   end
 end
 
-function setbreakpoint(cpuaddress, prgaddress)
+function setbreakpoint(cpuaddress, prgaddress, id)
   local ab = {}
+  ab.i = id
   ab.a = cpuaddress
   ab.b = emu.addMemoryCallback(memcallback, emu.memCallbackType.cpuExec, cpuaddress)
   local k = "cpu-" .. tostring(cpuaddress)
@@ -269,6 +273,7 @@ function alchemy65()
     if command == "setbreakpoint" then
       local cpuaddress = tonumber(args[2])
       local prgaddress = tonumber(args[3])
+      -- local id = args[4]
       setbreakpoint(cpuaddress, prgaddress)
       --log("setbreakpoint " .. tablelength(breakpoints))
       return true -- keep processing messages

@@ -41,6 +41,17 @@ class ThreadStoppedEvent extends Event implements StoppedEvent {
 	}
 	body: { reason: string, threadId: number, preserveFocusHint: boolean };
 }
+class BreakpointStoppedEvent extends Event implements StoppedEvent {
+	constructor(reason: string, breakpointId: number) {
+		super("stopped");
+		this.body = {
+			reason,
+			allThreadsStopped: true,
+			hitBreakpointIds: [breakpointId],
+		};
+	}
+	body: { reason: string, hitBreakpointIds: number[], allThreadsStopped: boolean, };
+}
 
 class ExitedEvent extends Event implements DebugProtocol.ExitedEvent {
 	body: {
@@ -222,12 +233,15 @@ class AlchemySocket {
 			()=>this.socket.write(`getlabel ${label} ${bytes}\n`));
 		return {address, prgOffset, values};
 	}
-	public setBreakpoints(breakpoints: {[key: string]: {cpu: number, prg: number}[]}) {
+	public setBreakpoints(breakpoints: {[key: string]: {cpu: number, prg: number, id: number}[]}) {
 		const points = Object.values(breakpoints).flatMap(x => x);
 		this.socket.write("clearbreakpoints\n");
-		points.forEach(point => {
-			this.socket.write(`setbreakpoint ${point.cpu} ${point.prg}\n`);
+		points.forEach(({cpu, prg, id}) => {
+			this.socket.write(`setbreakpoint ${cpu} ${prg} ${id}\n`);
 		});
+	}
+	public clearBreakpoints() {
+		this.socket.write("clearbreakpoints\n");
 	}
 }
 
@@ -362,8 +376,15 @@ export class Alchemy65DebugSession extends DebugSession {
 				this.sendEvent(new TerminatedEvent(false));
 			}
 		});
-		this.alchemySocket.events.on('isPaused', async (isPaused: string) => {
+		this.alchemySocket.events.on('isPaused', async (isPaused: string, breakpointId: string | undefined) => {
 			if(isPaused === "true") {
+				// breakpoint id? go there!
+				// if(breakpointId !== undefined) {
+				// 	this.sendEvent(new ThreadStoppedEvent('pause', 1, true));
+				// 	this.sendEvent(new ThreadStoppedEvent('pause', 2, true));
+				// 	this.sendEvent(new BreakpointStoppedEvent("breakpoint", Number.parseInt(breakpointId)));
+				// 	return;
+				// }
 				// if there's c code, go there, otherwise go to asm
 				await this.refreshStackFrames();
 				const cpuAvailable = this.stackFrames.findIndex(f => f.type === 1) !== -1;
@@ -506,7 +527,7 @@ export class Alchemy65DebugSession extends DebugSession {
 			this.launchedSuccessfully = true;
 			this.sendResponse(response);
 			if(args.resetOnEntry && args.stopOnEntry) {
-				this.alchemySocket?.resetBreak();
+				this.alchemySocket?.resetBreakNow();
 				this.alchemySocket?.setBreakpoints(this.breakpoints);
 			} else if (args.resetOnEntry) {
 				this.alchemySocket?.setBreakpoints(this.breakpoints);
@@ -829,7 +850,7 @@ export class Alchemy65DebugSession extends DebugSession {
 		this.sendResponse(response);
 	}
 
-	private breakpoints: {[key: string]: {cpu: number, prg: number}[]} = {};
+	private breakpoints: {[key: string]: {cpu: number, prg: number, id: number, line: number, name: string, }[]} = {};
 
 	protected async setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): Promise<void> {
 		if (!this.alchemySocket || !this.debugFile || !args.breakpoints || !args.source.path) {
@@ -856,24 +877,37 @@ export class Alchemy65DebugSession extends DebugSession {
 
 		const spans = args.breakpoints.flatMap(breakpoint => {
 			const findLine = breakpoint.line;
-			const spans = (<DbgMap>this.debugFile).line.filter(line => line.line === findLine).flatMap(line=>line.span);
-			
-			return <number[]> spans.filter(span => span !== undefined);
+			const lines = (<DbgMap>this.debugFile).line.filter(line => line.line === findLine && line.file === file.id);
+			const spans = lines.flatMap(line=>line.span);
+			const filterSpans = <number[]> spans.filter(span => span !== undefined);
+			return filterSpans.map(spanid => {
+				return {
+					spanid,
+					line: findLine,
+					name: file.name.substr(1,file.name.length-2),
+				};
+			});
 		});
 
-		const nesbreaks: {cpu: number, prg: number}[] = spans.map(s => {
-			const span = (<DbgMap>this.debugFile).span[s];
+		const nesbreaks: {cpu: number, prg: number, id: number, line: number, name: string}[] = spans.map(s => {
+			const span = (<DbgMap>this.debugFile).span[s.spanid];
 			const seg = (<DbgMap>this.debugFile).seg[span.seg];
-			let ret: {cpu: number, prg: number} | undefined = undefined;
+			let ret: {cpu: number, prg: number, id: number, line: number, name: string} | undefined = undefined;
 			if(seg.ooffs !== undefined) {
 				ret = {
 					cpu: seg.start + span.start,
 					prg: seg.ooffs - 16 + span.start,
+					id: 0 - (seg.ooffs - 16 + span.start), //negative ID for PRG breakpoints
+					line: s.line,
+					name: s.name,
 				};
 			} else {
 				ret = {
 					cpu: seg.start + span.start,
 					prg: -1,
+					id: seg.start + span.start, //positive ID for CPU breakpoints
+					line: s.line,
+					name: s.name,
 				};
 			}
 			return ret;
@@ -884,9 +918,20 @@ export class Alchemy65DebugSession extends DebugSession {
 		this.alchemySocket.setBreakpoints(this.breakpoints);
 
 		response.body = {
-			breakpoints: args.breakpoints.map(() => {
+			breakpoints: args.breakpoints.map(({line}) => {
+				// const nesbreak = nesbreaks.find(b => b.line === line);
+				// if (!nesbreak) {
+				// 	return {
+				// 		verified: true, // we're optimistic
+				// 	};
+				// }
 				return {
 					verified: true, // we're optimistic
+					// source: {
+					// 	name: nesbreak.name,
+					// 	path: path.join(this.config.sourcePath, nesbreak.name),
+					// },
+					// line: nesbreak.line,
 				};
 			}),
 		};
