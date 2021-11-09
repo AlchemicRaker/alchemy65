@@ -10,11 +10,11 @@ import {
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { Socket } from 'net';
 import { EventEmitter } from 'stream';
-import { Message } from 'vscode-debugadapter/lib/messages';
+// import { Message } from 'vscode-debugadapter/lib/messages';
 
 import { fstat } from 'fs';
 import { access } from 'fs/promises';
-import { addressToSpans, DbgMap, DbgScope, readDebugFile, spansToScopes, spansToSpanLines } from './dbgService';
+import { addressToSpans, DbgMap, DbgScope, DbgSym, readDebugFile, spansToScopes, spansToSpanLines } from './dbgService';
 import path = require('path');
 import { ChildProcess, ChildProcessWithoutNullStreams, spawn } from 'child_process';
 // import { Subject } from 'await-notify';
@@ -25,11 +25,21 @@ class AllStoppedEvent extends Event implements StoppedEvent {
 		super("stopped");
 		this.body = {
 			reason,
+			allThreadsStopped: true,
 		};
-		this.allThreadsStopped = true;
 	}
-	body: { reason: string; };
-	allThreadsStopped: boolean;
+	body: { reason: string; allThreadsStopped: boolean; };
+}
+class ThreadStoppedEvent extends Event implements StoppedEvent {
+	constructor(reason: string, threadId: number, preserveFocusHint: boolean) {
+		super("stopped");
+		this.body = {
+			reason,
+			threadId,
+			preserveFocusHint,
+		};
+	}
+	body: { reason: string, threadId: number, preserveFocusHint: boolean };
 }
 
 class ExitedEvent extends Event implements DebugProtocol.ExitedEvent {
@@ -284,11 +294,23 @@ export class Alchemy65DebugSession extends DebugSession {
 		}
 
 		const symbolName = `"${label}"`;
-		const symbol = this.debugFile.sym.find(s => s.name === symbolName && s.type !== "imp");
+		const cSymbolName = `"_${label}"`;
+
+		const sym = this.debugFile.sym.find(s => (s.name === symbolName || s.name === cSymbolName) && s.type !== "imp");
+		const csym = this.debugFile.csym.find(s => s.name === symbolName);
+
+		if (!sym && !csym) {
+			return {address: "-1", prgOffset: "-1", value: "-1"};
+		}
+		const symbol = sym !== undefined ? sym : csym?.sym !== undefined ? this.debugFile.sym[csym?.sym] : undefined;
+		if (!symbol) {
+			return {address: "-1", prgOffset: "-1", value: "-1"};
+		}
 
 		const size = symbol && symbol.size ? symbol.size : 1;
 
-		const {address, prgOffset, values} = await this.alchemySocket?.getLabel(label, Math.min(8, size));
+		const symbolLabel = symbolName.substr(1,symbolName.length-2);
+		const {address, prgOffset, values} = await this.alchemySocket?.getLabel(symbolLabel, Math.min(8, size));
 		if(values.length === 1 && values[0] === '') {
 			
 			if(symbol && symbol.val && symbol.val.length >= 3) {
@@ -340,17 +362,20 @@ export class Alchemy65DebugSession extends DebugSession {
 				this.sendEvent(new TerminatedEvent(false));
 			}
 		});
-		this.alchemySocket.events.on('isPaused', (isPaused: string) => {
+		this.alchemySocket.events.on('isPaused', async (isPaused: string) => {
 			if(isPaused === "true") {
-				this.sendEvent(new AllStoppedEvent('pause'));
-				this.sendEvent(new StoppedEvent('pause',2));
-				this.sendEvent(new StoppedEvent('pause',1));
+				// if there's c code, go there, otherwise go to asm
+				await this.refreshStackFrames();
+				const cpuAvailable = this.stackFrames.findIndex(f => f.type === 1) !== -1;
+				this.sendEvent(new ThreadStoppedEvent('pause', 1, !cpuAvailable));
+				this.sendEvent(new ThreadStoppedEvent('pause', 2, cpuAvailable));
 			}
 		});
-		this.alchemySocket.events.on('stepped', () => {
-			this.sendEvent(new AllStoppedEvent('step'));
-			this.sendEvent(new StoppedEvent('step',2));
-			this.sendEvent(new StoppedEvent('step',1));
+		this.alchemySocket.events.on('stepped', async () => {
+			await this.refreshStackFrames();
+			const cpuAvailable = this.stackFrames.findIndex(f => f.type === 1) !== -1;
+			this.sendEvent(new ThreadStoppedEvent('step', 1, !cpuAvailable));
+			this.sendEvent(new ThreadStoppedEvent('step', 2, cpuAvailable));
 		});
 		// TODO: wait for the socket to connect
 		try{
@@ -384,7 +409,7 @@ export class Alchemy65DebugSession extends DebugSession {
 
 		let isConfigured = false;
 		let retry = 0;
-		const retryLimit = 10;
+		const retryLimit = 4;
 
 		const progressStart = new CustomProgressStartEvent("attaching", "Establishing connection with debugger...", undefined, 0);
 
@@ -408,8 +433,12 @@ export class Alchemy65DebugSession extends DebugSession {
 		this.sendEvent(new ProgressEndEvent("attaching"));
 		
 		if(!isConfigured) {
-			// this.alchemySocket?.stop();
-			return this.sendEvent(new TerminatedEvent(false));
+			this.sendErrorResponse(response, {
+				id: 1001,
+				format: `connection error: unable to connect to alchemy65 debug host`,
+				showUser: true
+			});
+			return;
 		}
 		this.launchedSuccessfully = true;
 		this.sendResponse(response);
@@ -444,7 +473,7 @@ export class Alchemy65DebugSession extends DebugSession {
 
 		let isConfigured = false;
 		let retry = 0;
-		const retryLimit = 30;
+		const retryLimit = 60;
 
 		const progressStart = new CustomProgressStartEvent("attaching", "Establishing connection with debugger...", undefined, 0);
 
@@ -501,7 +530,6 @@ export class Alchemy65DebugSession extends DebugSession {
 		this.alchemySocket?.pause();
 		response.body = {};
 		this.sendResponse(response);
-		
 	}
 
 	protected restartRequest(response: DebugProtocol.RestartResponse, args: DebugProtocol.RestartArguments, request?: DebugProtocol.Request): void {
@@ -544,21 +572,18 @@ export class Alchemy65DebugSession extends DebugSession {
 		// only 1 or 2 threads, for the assembly and c stacks
 		response.body = {
 			threads: [
-				new Thread(1, "c thread"),
-				new Thread(2, "asm thread")
+				new Thread(1, "c source"),
+				new Thread(2, "asm source")
 			]
 		};
 		this.sendResponse(response);
 	}
 
 	private stackFrames: {type: number, frame: DebugProtocol.StackFrame}[] = [];
-	
-	protected async stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): Promise<void> {
+
+	protected async refreshStackFrames(): Promise<void> {
 		if (!this.alchemySocket || !this.debugFile) {
-			response.body = {
-				stackFrames: []
-			};
-			this.sendResponse(response);
+			this.stackFrames = [];
 			return;
 		}
 		
@@ -570,10 +595,7 @@ export class Alchemy65DebugSession extends DebugSession {
 		
 		const spanLines = spansToSpanLines(this.debugFile, spans);//.map(sl=>sl.line);
 		if (spanLines.length <= 0) {
-			response.body = {
-				stackFrames: []
-			};
-			this.sendResponse(response);
+			this.stackFrames = [];
 			return;
 		}
 		if (spanLines.length > 1) {
@@ -623,6 +645,11 @@ export class Alchemy65DebugSession extends DebugSession {
 		});
 
 		this.stackFrames = orderedFrames;
+	}
+	
+	protected async stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): Promise<void> {
+		//TODO: only update when necessary
+		await this.refreshStackFrames();
 
 		const filteredFrames = this.stackFrames.filter(sf => {
 			if(args.threadId === 1) {
@@ -691,11 +718,18 @@ export class Alchemy65DebugSession extends DebugSession {
 			response.body = {
 				variables: []
 			};
+			const numToPrettyHex: (n:number) => string = (n) => {
+				const hex = n.toString(16).toUpperCase();
+				if(hex.length % 2 === 1) {
+					return `0${hex}`;
+				}
+				return hex;
+			};
 			const pushVar = (name: string, value: number) => {
 				response.body.variables.push({
-					name, value: `${value}`,
+					name, value: numToPrettyHex(value),
 					variablesReference: 0,
-					memoryReference: "vmemref"
+					type: "string",
 				});
 			};
 			pushVar("a", a);
@@ -729,7 +763,13 @@ export class Alchemy65DebugSession extends DebugSession {
 
 		// look up all symbols in the scope
 		const variables:DebugProtocol.Variable[] = [];
-		const syms = this.debugFile.sym.filter(sym => sym.scope === args.variablesReference-10 );
+
+		const debugFile: DbgMap = this.debugFile;
+		const csyms = this.debugFile.csym.filter(csym => csym.scope === args.variablesReference-10 ); 
+		const syms = [
+			...this.debugFile.sym.filter(sym => sym.scope === args.variablesReference-10 ),
+			...csyms.map(csym => debugFile.sym[csym.sym]),
+		].reduce((a,b) => a.findIndex(ae => ae.id === b.id) !== -1 ? a : [...a, b], <DbgSym[]>[]);
 
 		for (let index = 0; index < syms.length; index++) {
 			const sym = syms[index];
@@ -751,7 +791,6 @@ export class Alchemy65DebugSession extends DebugSession {
 				name: sym.name.substr(1,sym.name.length-2),
 				value: v.value,
 				variablesReference: 0,
-				memoryReference: "vmemref",
 				type: 'string',
 				evaluateName: sym.name.substr(1,sym.name.length-2)
 			});

@@ -28,13 +28,25 @@ function log(c)
 end
 
 function onEndFrame()
-  isPaused = false
-  alchemy65()
+  if isPaused ~= false then
+    isPaused = false
+    if connection ~= nil then
+      connection:send("isPaused false\n")
+    end
+  end
+  while alchemy65() do
+  end
 end
 
 function onWhilePaused()
-  isPaused = true
-  alchemy65()
+  if isPaused ~= true then
+    isPaused = true
+    if connection ~= nil then
+      connection:send("isPaused true\n")
+    end
+  end
+  while alchemy65() do
+  end
 end
 
 function xmemcallback(address)
@@ -88,11 +100,23 @@ function setbreakpoint(cpuaddress, prgaddress)
 end
 
 function alchemy65()
-  if delayCommand == "reset" then
+  if delayCommand == "reset3" then
     delayCommand = nil
+    -- emu.resume()
+    log("resume")
+    return
+  end
+  if delayCommand == "reset2" then
+    delayCommand = "reset3"
     emu.reset()
-    emu.resume()
+    -- emu.breakExecution()
     log("reset")
+    return
+  end
+  if delayCommand == "reset" then
+    delayCommand = "reset2"
+    emu.resume()
+    log("resume")
     return
   end
   if delayCommand == "resetBreak" then
@@ -155,7 +179,7 @@ function alchemy65()
       else
         connection:send("isPaused false\n")
       end
-      return
+      return true -- keep processing messages
     end
     if command == "pause" then
       if isPaused == false then
@@ -213,7 +237,7 @@ function alchemy65()
       local pc_prg = emu.getPrgRomOffset(state.cpu.pc)
       connection:send("cpuvars " .. tostring(state.cpu.status) .. " " .. tostring(state.cpu.a) .. " " .. tostring(state.cpu.x) .. " " .. tostring(state.cpu.y) .. " " .. tostring(state.cpu.pc) .. " " .. tostring(state.cpu.sp) .. " " .. tostring(pc_prg) .. "\n")
       --log("cpuvars")
-      return
+      return true -- keep processing messages
     end
     if command == "getlabel" then
       local label = args[2]
@@ -233,13 +257,13 @@ function alchemy65()
       end
       connection:send("label-" .. label .. " " .. tostring(label_address) .. " " .. tostring(label_address_prg) .. " " .. tostring(label_value) .. "\n")
       --log("getlabel " .. label)
-      return
+      return true -- keep processing messages
     end
     
     if command == "clearbreakpoints" then
       clearbreakpoints()
       --log("clearbreakpoints " .. tablelength(breakpoints))
-      return
+      return true -- keep processing messages
     end
     
     if command == "setbreakpoint" then
@@ -247,7 +271,7 @@ function alchemy65()
       local prgaddress = tonumber(args[3])
       setbreakpoint(cpuaddress, prgaddress)
       --log("setbreakpoint " .. tablelength(breakpoints))
-      return
+      return true -- keep processing messages
     end
     
     if data ~= nil then
