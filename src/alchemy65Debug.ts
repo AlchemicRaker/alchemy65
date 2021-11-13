@@ -327,30 +327,31 @@ export class Alchemy65DebugSession extends DebugSession {
 			return {address: "-1", prgOffset: "-1", value: "-1"};
 		}
 
-		const size = symbol && symbol.size ? symbol.size : 1;
+		const size = symbol && symbol.size ? symbol.size : (symbol && symbol.type === "lab" ? 2 : 1);
 
 		const symbolLabel = symbol.name.substr(1,symbol.name.length-2);
 		const {address, prgOffset, values} = await this.alchemySocket?.getLabel(symbolLabel, Math.min(8, size));
-		if(values.length === 1 && values[0] === '') {
-			
-			if(symbol && symbol.val && symbol.val.length >= 3) {
-				const valTrim = symbol.val.substr(2); // remove the 0x prefix
-				const valPad = valTrim.length % 2 === 1 ? `0${valTrim}` : valTrim; // force an even number of chars
-				const values = [];
-				for (let i = 0; i < valPad.length; i+=2) {
-					values.push(valPad.substr(i, 2));
-				}
-				return {address: "-2", prgOffset: "-1", value: values.join(" ")};
+
+		let appendVal = "";
+		if(symbol && symbol.val && symbol.val.length >= 3) {
+			const valTrim = symbol.val.substr(2); // remove the 0x prefix
+			const valPad = valTrim.length % 2 === 1 ? `0${valTrim}` : valTrim; // force an even number of chars
+			const values = [];
+			for (let i = 0; i < valPad.length; i+=2) {
+				values.push(valPad.substr(i, 2));
 			}
-			
-			return {address: "-1", prgOffset: "-1", value: ""};
+			appendVal = values.join(" ");
+		}
+
+		if(values.length === 1 && values[0] === '') {
+			return {address: "-1", prgOffset: "-1", value: `(${appendVal})`};
 		}
 		const renderValue = (d: string) => {
 			const r = parseInt(d).toString(16).toUpperCase();
 			return r.length < 2 ? `0${r}` : r;
 		};
 		const value = values.map(v => renderValue(v)).join(" ");
-		const valueDecorate = size > 8 ? `${value} (...)` : value;
+		const valueDecorate = appendVal.length > 0 ? `${value} (${appendVal})` : value;
 		return {address, prgOffset, value: valueDecorate};
 	}
 	
@@ -666,12 +667,12 @@ export class Alchemy65DebugSession extends DebugSession {
 			};
 		});
 
-		const orderedFrames = unorderedFrames.sort(({type:a},{type:b})=>{
+		const orderedFrames = unorderedFrames.sort(({type:a},{type:b,frame})=>{
 			if(a === 1) { return -1; }
 			if(b === 1) { return 1; }
 
 			return a<b?-1:a>b?1:0;
-		});
+		}).reverse();
 
 		this.stackFrames = orderedFrames;
 	}
@@ -841,10 +842,6 @@ export class Alchemy65DebugSession extends DebugSession {
 		}
 
 		const expression = await this.getSymbol(args.expression);
-		if(expression.address === "-1") {
-			response.success = false;
-			return this.sendResponse(response);
-		}
 		response.body = {
 			result: expression.value,
 			variablesReference: 0
