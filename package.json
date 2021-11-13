@@ -7,14 +7,28 @@
 	},
 	"license": "MIT",
 	"repository": {
-		"url": "https://github.com/AlchemicRaker/alchemy65/"
+		"url": "https://github.com/AlchemicRaker/alchemy65/",
+		"type": "git"
 	},
+	"publisher": "alchemic-raker",
 	"version": "1.0.0",
 	"engines": {
 		"vscode": "^1.61.0"
 	},
 	"categories": [
-		"Other"
+		"Debuggers"
+	],
+	"icon": "res/icon.png",
+	"keywords": [
+		"cc65",
+		"ca65",
+		"6502",
+		"nes",
+		"nintendo",
+		"debug",
+		"alchemy65",
+		"homebrew",
+		"mesen"
 	],
 	"activationEvents": [
 		"onDebugResolve:alchemy65",

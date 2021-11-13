@@ -6,15 +6,15 @@ This vscode extension adds syntax and debugger support for cc65 and ca65, especi
 
 **Debugs both C and assembly.**
 
-![Set breakpoints and step through your code.](res/c-and-asm.png)
+![Set breakpoints and step through your code.](https://github.com/AlchemicRaker/alchemy65/blob/master/res/c-and-asm.png)
 
 **Easily trace execution through macros.**
 
-![Easily trace execution of macros.](res/macro-stack.png)
+![Easily trace execution of macros.](https://github.com/AlchemicRaker/alchemy65/blob/master/res/macro-stack.png)
 
 **Inline Build Errors and Warnings***, (enable these via the "bonus" setup step)
 
-![Inline Build Errors and Warnings](res/build-output.png)
+![Inline Build Errors and Warnings](https://github.com/AlchemicRaker/alchemy65/blob/master/res/build-output.png)
 
 ## Guide to Setting Up Debugging For Your Project
 
