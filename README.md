@@ -65,6 +65,14 @@ Use "Add Configuration" to add sample **Alchemy65** Launch and Attach configurat
 * Mesen's debugger is _very particular_. Using Mesen's debugger _and_ the **Alchemy65** debugger (e.g. setting breakpoints in both) is prone to unexpected behaviors.
   * When **Alchemy65** launches Mesen for debugging, the debug and script windows appear.
 
+## Building Alchemy65
+
+**Alchemy65** is in the VSCode Marketplace and ready to install without having to build it. But if you wish to build it yourself, it is not difficult. The only dependency is **npm**.
+
+1. Clone this repository to your environment
+2. Run `npm install` in the root folder
+3. Run the extension in a new VSCode window with `F5`
+
 ## Release Notes
 
 It's here!
