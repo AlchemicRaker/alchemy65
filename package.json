@@ -6,6 +6,9 @@
 		"name": "Zachery Delafosse"
 	},
 	"license": "MIT",
+	"repository": {
+		"url": "https://github.com/AlchemicRaker/alchemy65/"
+	},
 	"version": "0.0.1",
 	"engines": {
 		"vscode": "^1.61.0"
