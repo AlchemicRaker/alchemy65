@@ -12,6 +12,10 @@ This vscode extension adds syntax and debugger support for cc65 and ca65, especi
 
 ![Easily trace execution of macros.](res/macro-stack.png)
 
+**Inline Build Errors and Warnings***, (enable these via the "bonus" setup step)
+
+![Inline Build Errors and Warnings](res/build-output.png)
+
 ## Guide to Setting Up Debugging For Your Project
 
 Projects already using cc65 can easily start using this extension. This guide assumes you have an NES project that uses cc65.
@@ -35,7 +39,6 @@ Projects already using cc65 can easily start using this extension. This guide as
     1. Update the **"romPath"** and **"dbgPath"** to match the files you're building.
     1. Update **"program"** to point to the full or relative path to **mesen.exe**, or just to **"mesen"** if it's already in your **PATH**.
     1. **Optional / Bonus: Inline Build Errors and Warnings:** From the top menu select "Terminal" and "Configure Default Build Task" to generate a **tasks.json**. Remove that generated task and [replace it with this](res/sample-tasks.json) to have it parse the build output into VSCode. From now on you can use `ctrl+shift+b` to build your code.
-        * [check out what it looks like](res/build-output.png)
 1. **Start Debugging**
     1. Set a breakpoint in your code, maybe code in your game's main loop, by clicking next to the line numbers in your source code.
     1. From the "Run" menu, select "Start Debugging" (or `F5`).
