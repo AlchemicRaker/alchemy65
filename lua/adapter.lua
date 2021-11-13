@@ -49,12 +49,6 @@ function onWhilePaused()
   end
 end
 
-function xmemcallback(address)
-        connection:send("isPaused true\n")
-        log("breakpoint! " .. tostring(address))
-        emu.breakExecution()
-        return
-end
 function memcallback(address)
   if delayCommand ~= nil then
     return
@@ -65,14 +59,14 @@ function memcallback(address)
   if prg ~= -1 and prg ~= nil then
     if breakpoints["prg-" .. tostring(prg)] ~= nil then
         connection:send("isPaused true\n")
-        log("prg breakpoint!")
+        -- log("prg breakpoint!")
         emu.breakExecution()
     end
     return -- we know it's in prg space and we didn't find it so don't check cpu
   end
   if breakpoints["cpu-" .. tostring(address)] ~= nil then
         connection:send("isPaused true\n")
-        log("cpu breakpoint!")
+        -- log("cpu breakpoint!")
         emu.breakExecution()
     return
   end
@@ -107,20 +101,20 @@ function alchemy65()
   if delayCommand == "reset3" then
     delayCommand = nil
     -- emu.resume()
-    log("resume")
+    -- log("resume")
     return
   end
   if delayCommand == "reset2" then
     delayCommand = "reset3"
     emu.reset()
     -- emu.breakExecution()
-    log("reset")
+    -- log("reset")
     return
   end
   if delayCommand == "reset" then
     delayCommand = "reset2"
     emu.resume()
-    log("resume")
+    -- log("resume")
     return
   end
   if delayCommand == "resetBreak" then
@@ -131,7 +125,7 @@ function alchemy65()
     emu.reset()
     emu.breakExecution()
     connection:send("isPaused true\n")
-    log("resetBreak")
+    -- log("resetBreak")
     return
   end
   if connection == nil then
@@ -154,7 +148,7 @@ function alchemy65()
     -- receive any messages?
     local data, err, partial = connection:receive()
     if partial ~= nil and partial ~= "" then
-      log("partial: " .. partial)
+      -- log("partial: " .. partial)
     end
     
     if err == "timeout" then
@@ -189,10 +183,10 @@ function alchemy65()
       if isPaused == false then
         emu.breakExecution()
         connection:send("isPaused true\n")
-        log("pause")
+        -- log("pause")
       else
         connection:send("isPaused true\n")
-        log("already paused")
+        -- log("already paused")
       end
       
       return
@@ -201,10 +195,10 @@ function alchemy65()
       if isPaused == true then
         emu.resume()
         connection:send("isPaused false\n")
-        log("resume")
+        -- log("resume")
       else
         connection:send("isPaused false\n")
-        log("already resumed")
+        -- log("already resumed")
       end
       return
     end
@@ -227,25 +221,25 @@ function alchemy65()
       emu.reset()
       emu.breakExecution()
       connection:send("isPaused true\n")
-      log("resetBreak")
+      -- log("resetBreak")
       return
     end
     if command == "next" then
       emu.execute(1, emu.executeCountType.cpuInstructions)
       connection:send("stepped\n")
-      log("stepInto")
+      -- log("stepInto")
       return
     end
     if command == "stepOver" then
       emu.stepOver()
       connection:send("stepped\n")
-      log("stepOver")
+      -- log("stepOver")
       return
     end
     if command == "stepOut" then
       emu.stepOut()
       connection:send("stepped\n")
-      log("stepOut")
+      -- log("stepOut")
       return
     end
     if command == "getcpuvars" then
@@ -292,7 +286,7 @@ function alchemy65()
     end
     
     if data ~= nil then
-      log("data: " .. data)
+      log("unexpected : " .. data)
     end
   end
 end

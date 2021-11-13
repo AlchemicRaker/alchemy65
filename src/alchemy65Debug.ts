@@ -645,7 +645,7 @@ export class Alchemy65DebugSession extends DebugSession {
 			const file = (<DbgMap>this.debugFile).file[line.file];
 			const filename = file.name.substr(1,file.name.length-2);
 			const type = line.type || -1;
-			const descriptor = type === -1 ? "(asm)"
+			const descriptor = type === -1 ? " (asm)"
 							 : type === 1 ? ` (c)`
 							 : type === 2 ? ` (macro)` // TODO: load the line to show as hint
 							 : ` (${type})`;
