@@ -2,6 +2,10 @@
 	"name": "alchemy65",
 	"displayName": "Alchemy65",
 	"description": "Adds support for cc65, ca65, and NES development.",
+	"author": {
+		"name": "Zachery Delafosse"
+	},
+	"license": "MIT",
 	"version": "0.0.1",
 	"engines": {
 		"vscode": "^1.61.0"
