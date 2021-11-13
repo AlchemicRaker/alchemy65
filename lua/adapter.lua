@@ -233,7 +233,19 @@ function alchemy65()
     if command == "next" then
       emu.execute(1, emu.executeCountType.cpuInstructions)
       connection:send("stepped\n")
-      log("step")
+      log("stepInto")
+      return
+    end
+    if command == "stepOver" then
+      emu.stepOver()
+      connection:send("stepped\n")
+      log("stepOver")
+      return
+    end
+    if command == "stepOut" then
+      emu.stepOut()
+      connection:send("stepped\n")
+      log("stepOut")
       return
     end
     if command == "getcpuvars" then

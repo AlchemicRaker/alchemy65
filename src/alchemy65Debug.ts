@@ -212,6 +212,12 @@ class AlchemySocket {
 	public next() {
 		this.socket.write("next\n");
 	}
+	public stepOver() {
+		this.socket.write("stepOver\n");
+	}
+	public stepOut() {
+		this.socket.write("stepOut\n");
+	}
 	public stop() {
 		this.socket.end();
 	}
@@ -323,7 +329,7 @@ export class Alchemy65DebugSession extends DebugSession {
 
 		const size = symbol && symbol.size ? symbol.size : 1;
 
-		const symbolLabel = symbolName.substr(1,symbolName.length-2);
+		const symbolLabel = symbol.name.substr(1,symbol.name.length-2);
 		const {address, prgOffset, values} = await this.alchemySocket?.getLabel(symbolLabel, Math.min(8, size));
 		if(values.length === 1 && values[0] === '') {
 			
@@ -490,7 +496,9 @@ export class Alchemy65DebugSession extends DebugSession {
 			this.config.romPath,
 			this.context.asAbsolutePath("lua/adapter.lua"),
 		];
-		this.program = spawn(this.config.program, spawnArgs);
+		this.program = spawn(this.config.program, spawnArgs, {
+			cwd: path.parse(this.config.dbgPath).dir,
+		});
 
 		let isConfigured = false;
 		let retry = 0;
@@ -845,7 +853,17 @@ export class Alchemy65DebugSession extends DebugSession {
 	}
 
 	protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments, request?: DebugProtocol.Request): void {
+		this.alchemySocket?.stepOver();
+		response.body = {};
+		this.sendResponse(response);
+	}
+	protected stepInRequest(response: DebugProtocol.StepInResponse, args: DebugProtocol.StepInArguments, request?: DebugProtocol.Request): void {
 		this.alchemySocket?.next();
+		response.body = {};
+		this.sendResponse(response);
+	}
+    protected stepOutRequest(response: DebugProtocol.StepOutResponse, args: DebugProtocol.StepOutArguments, request?: DebugProtocol.Request): void {
+		this.alchemySocket?.stepOut();
 		response.body = {};
 		this.sendResponse(response);
 	}

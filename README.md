@@ -1,31 +1,34 @@
-# alchemy65 README
+# Alchemy65 README
 
-This is the README for your extension "alchemy65". After writing up a brief description, we recommend including the following sections.
+This vscode extension adds syntax and debugger support for cc65 and ca65, especially for NES development. Currently Alchemy65 only supports debugging with the latest version of Mesen-X, [available here](https://github.com/NovaSquirrel/Mesen-X/actions/runs/1442208843).
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+Alchemy65 brings the modern debugging experience to the world of NES homebrew development. Check out a few of the features:
 
-For example if there is an image subfolder under your extension project workspace:
+![Set breakpoints and step through your code.](res/breakpoints.png)
 
-\!\[feature X\]\(images/feature-x.png\)
+**Set breakpoints and step through your code.**
+
+![Set breakpoints and step through your code.](res/c-and-asm.png)
+
+**Follow along in both C and assembly.**
+
+Watch variables and monitor the CPU state.
 
 > Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
 
+## Getting It Set Up
+
+1. **coming soon**
+
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+Alchemy65 works with the `.dbg` file generated cc65 / ca65 compilers. Remember to export your c symbols if you want a better debugging experience in c source code.
 
-## Extension Settings
+Alchemy65 currently only supports debugging through mesen-x, using a special lua script that allows Alchemy65 to inspect and control the emulator. Support for other emulators is _possible_ if the necessary integration points are exposed (pause/resume, breakpoints, single-step execution, PC location in both CPU and PRG address space, memory inspection, and so on).
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: enable/disable this extension
-* `myExtension.thing`: set to `blah` to do something
+Use "Add Configuration" to add Alchemy65 Launch and Attach configurations to your `launch.json` file.
 
 ## Known Issues
 
@@ -37,34 +40,5 @@ Users appreciate release notes as you update your extension.
 
 ### 1.0.0
 
-Initial release of ...
+Initial release of Alchemy65
 
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
------------------------------------------------------------------------------------------------------------
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-**Note:** You can author your README using Visual Studio Code.  Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux)
-* Toggle preview (`Shift+CMD+V` on macOS or `Shift+Ctrl+V` on Windows and Linux)
-* Press `Ctrl+Space` (Windows, Linux) or `Cmd+Space` (macOS) to see a list of Markdown snippets
-
-### For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
