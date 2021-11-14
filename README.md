@@ -6,15 +6,15 @@ This vscode extension adds syntax and debugger support for cc65 and ca65, especi
 
 **Debugs both C and assembly.**
 
-![Set breakpoints and step through your code.](https://github.com/AlchemicRaker/alchemy65/blob/master/res/c-and-asm.png)
+![Set breakpoints and step through your code.](https://github.com/AlchemicRaker/alchemy65/raw/master/res/c-and-asm.png)
 
 **Easily trace execution through macros.**
 
-![Easily trace execution of macros.](https://github.com/AlchemicRaker/alchemy65/blob/master/res/macro-stack.png)
+![Easily trace execution of macros.](https://github.com/AlchemicRaker/alchemy65/raw/master/res/macro-stack.png)
 
 **Inline Build Errors and Warnings***, (enable these via the "bonus" setup step)
 
-![Inline Build Errors and Warnings](https://github.com/AlchemicRaker/alchemy65/blob/master/res/build-output.png)
+![Inline Build Errors and Warnings](https://github.com/AlchemicRaker/alchemy65/raw/master/res/build-output.png)
 
 ## Guide to Setting Up Debugging For Your Project
 
@@ -26,7 +26,7 @@ Projects already using cc65 can easily start using this extension. This guide as
         * [Linux Build](https://github.com/NovaSquirrel/Mesen-X/actions/runs/1457182135)
     2. The cc65 macro assembler, [available here](https://cc65.github.io/), can output **.dbg** files. Setting up **cc65** is an exercise left for the reader, but enabling the debug output is simple:
         * Use the `--dbgfile` option when calling the **ld65** linker.
-        * For Example: `ld65 -C config.cfg -o game.nes crt0.o --dbgfile game.dbg`
+        * Use the `-g` option when calling **ca65** assembler.
         * Make sure the filenames for the rom and debug file match, like **foo.nes** and **foo.dbg**. This is how Mesen-X finds the **.dbg** file.
 1. **Set Up Visual Studio Code**
     1. Visual Studio Code, [available here](https://code.visualstudio.com/), is a freely available and feature-full IDE, appropriate for NES homebrew. You will need it in order to use this extension.
