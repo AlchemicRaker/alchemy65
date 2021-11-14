@@ -11,7 +11,7 @@
 		"type": "git"
 	},
 	"publisher": "alchemic-raker",
-	"version": "1.0.4",
+	"version": "1.0.6",
 	"engines": {
 		"vscode": "^1.61.0"
 	},

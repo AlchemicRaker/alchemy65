@@ -4,9 +4,11 @@ This vscode extension adds syntax and debugger support for cc65 and ca65, especi
 
 ## Features
 
+![development demo](https://github.com/AlchemicRaker/alchemy65/raw/master/res/dev-demo.gif)
+
 **Debugs both C and assembly.**
 
-![Set breakpoints and step through your code.](https://github.com/AlchemicRaker/alchemy65/raw/master/res/c-and-asm.png)
+![Debugs both C and assembly.](https://github.com/AlchemicRaker/alchemy65/raw/master/res/c-and-asm.png)
 
 **Easily trace execution through macros.**
 
