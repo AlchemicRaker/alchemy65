@@ -12,7 +12,7 @@ This vscode extension adds syntax and debugger support for cc65 and ca65, especi
 
 ![Easily trace execution of macros.](https://github.com/AlchemicRaker/alchemy65/raw/master/res/macro-stack.png)
 
-**Inline Build Errors and Warnings***, (enable these via the "bonus" setup step)
+**Inline Build Errors and Warnings**, (enable these via the "bonus" setup step)
 
 ![Inline Build Errors and Warnings](https://github.com/AlchemicRaker/alchemy65/raw/master/res/build-output.png)
 
@@ -30,7 +30,7 @@ Projects already using cc65 can easily start using this extension. This guide as
         * Make sure the filenames for the rom and debug file match, like **foo.nes** and **foo.dbg**. This is how Mesen-X finds the **.dbg** file.
 1. **Set Up Visual Studio Code**
     1. Visual Studio Code, [available here](https://code.visualstudio.com/), is a freely available and feature-full IDE, appropriate for NES homebrew. You will need it in order to use this extension.
-    1. Navigate to "Extensions" (or `ctrl+shift+x`), search for "Alchemy65", and click **Install** to get this extension. You may also install it through [this marketplace link] (TODO).
+    1. Navigate to "Extensions" (or `ctrl+shift+x`), search for "Alchemy65", and click **Install** to get this extension. You may also install it through [this marketplace link](https://marketplace.visualstudio.com/items?itemName=alchemic-raker.alchemy65).
         * Please note that in addition to debugging, this extension will add syntax hilighting for your NES project, for both assembly and c source.
 1. **Set Up Your Project**
     1. After launching VSCode, use the "Open Folder" option to open the root directory of your NES project.
