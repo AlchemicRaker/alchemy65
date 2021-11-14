@@ -26,7 +26,7 @@ Projects already using cc65 can easily start using this extension. This guide as
         * [Linux Build](https://github.com/NovaSquirrel/Mesen-X/actions/runs/1457182135)
     2. The cc65 macro assembler, [available here](https://cc65.github.io/), can output **.dbg** files. Setting up **cc65** is an exercise left for the reader, but enabling the debug output is simple:
         * Use the `--dbgfile` option when calling the **ld65** linker.
-        * Use the `-g` option when calling **ca65** assembler.
+        * Use the `-g` option with all calls to **ca65** and **cc65**.
         * Make sure the filenames for the rom and debug file match, like **foo.nes** and **foo.dbg**. This is how Mesen-X finds the **.dbg** file.
 1. **Set Up Visual Studio Code**
     1. Visual Studio Code, [available here](https://code.visualstudio.com/), is a freely available and feature-full IDE, appropriate for NES homebrew. You will need it in order to use this extension.
