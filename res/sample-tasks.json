@@ -9,9 +9,20 @@
             "command": "make | ./build.bat | etc...",
             "problemMatcher": [
                 {
-                    "pattern":[
+                    "pattern": [
                         {
                             "regexp": "^([^:]*):([0-9]+): ?([^:]*): ?(.*)$",
+                            "file": 1,
+                            "location": 2,
+                            "severity": 3,
+                            "message": 4
+                        }
+                    ]
+                },
+                {
+                    "pattern": [
+                        {
+                            "regexp": "^([^:]*)\\(([0-9]+)\\): ?([^:]*): ?(.*)$",
                             "file": 1,
                             "location": 2,
                             "severity": 3,
