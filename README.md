@@ -21,10 +21,8 @@ This vscode extension adds syntax and debugger support for cc65 and ca65, especi
 Projects already using cc65 can easily start using this extension. This guide assumes you have an NES project that uses cc65.
 
 1. **Dependencies**
-    1. Mesen-X is a maintained fork of Mesen. The latest builds of Mesen-X have been enhanced to support debugging in **Alchemy65**. Download and extract the build for your OS:
-        * [Windows Build](https://github.com/NovaSquirrel/Mesen-X/actions/runs/1457182132)
-        * [Linux Build](https://github.com/NovaSquirrel/Mesen-X/actions/runs/1457182135)
-    2. The cc65 macro assembler, [available here](https://cc65.github.io/), can output **.dbg** files. Setting up **cc65** is an exercise left for the reader, but enabling the debug output is simple:
+    1. [Mesen-X 1.0.0](https://github.com/NovaSquirrel/Mesen-X/releases/tag/1.0.0) is a maintained fork of Mesen that, among other things, has been enhanced to support debugging in **Alchemy65**. Download and extract the version for your OS. Run it once to set up the emulator and controller configs the way you like.
+    2. The [cc65 macro assembler](https://cc65.github.io/) can output **.dbg** files. Setting up **cc65** is an exercise left for the reader, but enabling the debug output is simple:
         * Use the `--dbgfile` option when calling the **ld65** linker.
         * Use the `-g` option with all calls to **ca65** and **cc65**.
         * Make sure the filenames for the rom and debug file match, like **foo.nes** and **foo.dbg**. This is how Mesen-X finds the **.dbg** file.
@@ -53,7 +51,7 @@ Projects already using cc65 can easily start using this extension. This guide as
 
 **Alchemy65** works with the **.dbg** file generated cc65 / ca65 compilers. Remember to export your c symbols (Add the `-s` flag to **cc65**) if you want a better debugging experience in c source code.
 
-**Alchemy65** currently only supports debugging through mesen-x, using a special lua script that allows **Alchemy65** to inspect and control the emulator. Support for other emulators is _possible_ if the necessary integration points are exposed (pause/resume, breakpoints, single-step execution, PC location in both CPU and PRG address space, memory inspection, and so on). 
+**Alchemy65** currently only supports debugging through Mesen-X 1.0.0+, using a special lua script that allows **Alchemy65** to inspect and control the emulator. Support for other emulators is _possible_ if the necessary integration points are exposed (pause/resume, breakpoints, single-step execution, PC location in both CPU and PRG address space, memory inspection, and so on). 
 
 Use "Add Configuration" to add sample **Alchemy65** Launch and Attach configurations to your **launch.json** file.
 
