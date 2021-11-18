@@ -11,7 +11,7 @@
 		"type": "git"
 	},
 	"publisher": "alchemic-raker",
-	"version": "1.0.6",
+	"version": "1.0.8",
 	"engines": {
 		"vscode": "^1.61.0"
 	},
@@ -28,7 +28,9 @@
 		"debug",
 		"alchemy65",
 		"homebrew",
-		"mesen"
+		"mesen",
+		"assembly",
+		"c"
 	],
 	"activationEvents": [
 		"onDebugResolve:alchemy65",

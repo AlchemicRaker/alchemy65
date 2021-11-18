@@ -484,15 +484,6 @@ export class Alchemy65DebugSession extends DebugSession {
 	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: ILaunchRequestArguments) {
 		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
 
-		const programExists = await access(this.config.program).then(()=>true).catch(()=>false);
-		if(!programExists) {
-			this.sendErrorResponse(response, {
-				id: 1001,
-				format: `launch error: unable to locate emulator`,
-				showUser: true
-			});
-			return;
-		}
 		const spawnArgs = [
 			this.config.romPath,
 			this.context.asAbsolutePath("lua/adapter.lua"),
@@ -500,10 +491,17 @@ export class Alchemy65DebugSession extends DebugSession {
 		this.program = spawn(this.config.program, spawnArgs, {
 			cwd: path.parse(this.config.dbgPath).dir,
 		});
-
+		
 		let isConfigured = false;
 		let retry = 0;
 		const retryLimit = 60;
+		let failMessage = `connection error: unable to connect to alchemy65 debug host`;
+
+		this.program.on("error", (err) => { // failed to spawn, exit early
+			failMessage = `launch error: ${err.message}`;
+			retry = retryLimit;
+		});
+
 
 		const progressStart = new CustomProgressStartEvent("attaching", "Establishing connection with debugger...", undefined, 0);
 
@@ -529,7 +527,7 @@ export class Alchemy65DebugSession extends DebugSession {
 		if (!isConfigured) {
 			this.sendErrorResponse(response, {
 				id: 1001,
-				format: `connection error: unable to connect to alchemy65 debug host`,
+				format: failMessage,
 				showUser: true
 			});
 		} else {
@@ -877,10 +875,18 @@ export class Alchemy65DebugSession extends DebugSession {
 		}
 		
 		//clear debugger breakpoints for this source and assign new ones
-		//TODO: this is terrible
-		const workspace = this.config.sourcePath;
-		const normalizePath = args.source.path.substr(workspace.length).replace("\\","/");
-		const file = this.debugFile.file.find(file => file.name === `"${normalizePath}"`);
+
+		const normalizePath: (p: string) => string = (p) => path.format(path.parse(p));
+		const lowerFirst: (p: string) => string = (p) => {
+			return `${p.substr(0,1).toLowerCase()}${p.substr(1)}`;
+		};
+
+ 		const workspace = normalizePath(this.config.sourcePath);
+		const argpath = lowerFirst(normalizePath(args.source.path));
+		const file = this.debugFile.file.find(file => {
+			const fp = lowerFirst(path.join(workspace, file.name.substr(1,file.name.length-2)));
+			return fp === argpath;
+		});
 
 		if (!file) {
 			response.body = {
